@@ -1,7 +1,7 @@
 # phase-03-videos — Progress
 
 **Status:** in_progress
-**SIs:** 10/14 completed
+**SIs:** 11/14 completed
 
 ### SI-03.1 — Provisionar MinIO e Redis no Compose
 - **Status:** completed
@@ -94,9 +94,13 @@
   - No ambiente de teste `STORAGE_PUBLIC_ENDPOINT=http://minio:9000` (mesmo host interno, pois os testes rodam dentro da rede Docker), então seguir o `Location` a partir do container funciona; o e2e afere `minio:9000` + `X-Amz-Signature` no `Location`.
 
 ### SI-03.11 — Implementar FfmpegService (probe e thumbnail)
-- **Status:** pending
-- **Tests:** _(not run)_
-- **Observations:** none
+- **Status:** completed
+- **Tests:** 6 passing (ffmpeg.service.spec 3 unit [parseProbeOutput] + ffmpeg.service.integration-spec 3 contra ffmpeg real DENTRO do video-worker)
+- **Observations:**
+  - `FfmpegService.probe` = `execFile('ffprobe', ['-v','error','-print_format','json','-show_format','-show_streams', inputUrl])` promisificado com `maxBuffer` 16 MiB. `generateThumbnail(inputUrl, outPath, atSecond)` = `execFile('ffmpeg', ['-ss', t, '-i', inputUrl, '-frames:v','1','-vf','scale=640:-2','-q:v','3','-y', outPath])`. Input sempre URL/caminho seekable (nunca stdin — moov atom no fim do MP4). O cálculo `t = min(1s, 10% duração)` fica no chamador (processor, SI-03.12); o helper recebe `atSecond`.
+  - Parse extraído em função pura `parseProbeOutput(stdout)` (unit-testável sem invocar ffprobe). Falhas classificadas em `MediaProcessingError` com códigos do Error Catalog: exec de ffprobe falha ou JSON inválido → `PROBE_FAILED` (stderr embutido na mensagem); ausência de stream de vídeo → `UNSUPPORTED_MEDIA`; falha do thumbnail → `THUMBNAIL_FAILED`.
+  - Fixtures commitadas: `test/fixtures/tiny.mp4` (3.7 KB, h264 128x72 1s, gerado DENTRO do video-worker) + `src/worker/__fixtures__/ffprobe-tiny.output.json` (saída real do ffprobe para o unit test parsear). Nota de regeneração em `test/fixtures/README.md`.
+  - Testes integration do src/worker rodam DENTRO do container video-worker (única imagem com ffmpeg): `docker compose exec -T video-worker npx jest --runInBand --forceExit src/worker`. FfmpegService ainda não é registrado em módulo — instanciado direto nos testes; registro no WorkerModule vem no SI-03.12.
 
 ### SI-03.12 — Implementar VideoProcessor (consumo, transições e falhas)
 - **Status:** pending
