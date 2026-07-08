@@ -157,7 +157,7 @@ Entregar o ciclo completo de vídeo do StreamTube: upload direto ao object stora
 ### SI-03.6 — Implementar initiate upload (POST /videos)
 
 **Route:** POST /videos
-**Test Specs:** _pending /plan-test-specs_
+**Test Specs:** see `nestjs-project/specs/videos-initiate.plan.md`
 
 **Description:** Pré-cadastro automático do vídeo como rascunho ao iniciar o upload: cria a linha `draft` com `public_id`, abre o multipart no storage e devolve as URLs presigned das partes.
 
@@ -189,7 +189,7 @@ Entregar o ciclo completo de vídeo do StreamTube: upload direto ao object stora
 ### SI-03.7 — Implementar complete upload e enfileiramento (POST /videos/:publicId/complete)
 
 **Route:** POST /videos/:publicId/complete
-**Test Specs:** _pending /plan-test-specs_
+**Test Specs:** see `nestjs-project/specs/videos-complete.plan.md`
 
 **Description:** Fecha o multipart no storage, verifica o objeto real, transiciona `draft→processing` via CAS e publica o job `video.process` — o ponto de entrada do processamento automático.
 
@@ -222,7 +222,7 @@ Entregar o ciclo completo de vídeo do StreamTube: upload direto ao object stora
 ### SI-03.8 — Implementar consulta de vídeo (GET /videos/:publicId)
 
 **Route:** GET /videos/:publicId
-**Test Specs:** _pending /plan-test-specs_
+**Test Specs:** see `nestjs-project/specs/videos-get.plan.md`
 
 **Description:** Expõe metadados e status do vídeo pela URL única, com a regra de visibilidade da fase: `ready` é público; não-`ready` só o dono vê.
 
@@ -275,7 +275,7 @@ Entregar o ciclo completo de vídeo do StreamTube: upload direto ao object stora
 ### SI-03.10 — Implementar streaming e download (302 → presigned GET)
 
 **Route:** GET /videos/:publicId/stream
-**Test Specs:** _pending /plan-test-specs_
+**Test Specs:** see `nestjs-project/specs/videos-delivery.plan.md`
 
 **Description:** Entrega reprodução via streaming (Range/206 servido nativamente pelo storage) e download com filename, sem nenhum byte de vídeo atravessar a API.
 
