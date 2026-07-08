@@ -1,7 +1,7 @@
 # phase-03-videos — Progress
 
 **Status:** in_progress
-**SIs:** 3/14 completed
+**SIs:** 4/14 completed
 
 ### SI-03.1 — Provisionar MinIO e Redis no Compose
 - **Status:** completed
@@ -26,9 +26,15 @@
   - Instalados `@aws-sdk/client-s3@^3.1081.0`, `@aws-sdk/s3-request-presigner@^3.1081.0`, `@aws-sdk/lib-storage@^3.1081.0` no container.
 
 ### SI-03.4 — Criar entidade Video, migration CreateVideos e gerador de public_id
-- **Status:** pending
-- **Tests:** _(not run)_
-- **Observations:** none
+- **Status:** completed
+- **Tests:** 11 passing (public-id.util.spec 4, video.entity.integration-spec 4, videos.module.spec 1, migrations.integration-spec 2)
+- **Observations:**
+  - Migration `1783526745739-CreateVideos.ts` gerada via CLI (typeorm migration:generate), com enum `video_status`, tabela `videos`, unique `public_id`, índices `(status, created_at)` e `(channel_id)` e FK `channel_id`→`channels`. `migration:run`/`revert` verificados.
+  - Estendido `migrations.integration-spec.ts` (per instrução do orquestrador): 3 migrations / 5 tabelas, drop de `video_status` no setup e o teste de revert agora afere a remoção da tabela `videos` (último migration).
+  - `cleanAllTables` (helper compartilhado) passou a deletar `videos` antes de `channels` — consequência necessária da nova FK `videos.channel_id`→`channels`; sem isso, qualquer teste com vídeos quebraria o `DELETE FROM channels`.
+  - Relação Video→Channel definida só no lado dono (`@ManyToOne` + `channel_id`), sem o inverso `@OneToMany` no `Channel`, para não acoplar o módulo channels ao videos (Single Responsibility). ManyToOne sem inverso é válido no TypeORM.
+  - `bigint`/`numeric` recebem transformers para expor `number` limpo no código (file_size ≤ 10 GiB e duration cabem em Number seguro).
+  - Colunas de timestamp usam `timestamptz` (byte-verbatim do Data Model), diferente do `TIMESTAMP` das tabelas herdadas da fase 01.
 
 ### SI-03.5 — Configurar QueueModule (BullMQ) e producer de jobs
 - **Status:** pending
