@@ -177,6 +177,23 @@ export class StorageService implements OnModuleInit {
     );
   }
 
+  /**
+   * Presigned GET on the INTERNAL endpoint — for the worker, which reaches the
+   * storage over the Compose network and must not depend on the public endpoint
+   * (a CDN/external host in prod). Used as the seekable ffprobe/ffmpeg input
+   * (phase-03-videos/TD-03).
+   */
+  async presignInternalGetUrl(
+    key: string,
+    opts: { expiresIn: number },
+  ): Promise<string> {
+    return getSignedUrl(
+      this.s3,
+      new GetObjectCommand({ Bucket: this.config.bucket, Key: key }),
+      { expiresIn: opts.expiresIn },
+    );
+  }
+
   async putObject(
     key: string,
     body: Buffer | Uint8Array | string,

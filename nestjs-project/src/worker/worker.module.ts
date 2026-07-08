@@ -11,6 +11,8 @@ import { Channel } from '../channels/entities/channel.entity';
 import { User } from '../users/entities/user.entity';
 import { Video } from '../videos/entities/video.entity';
 import { VIDEO_QUEUE } from '../queue/queue.constants';
+import { FfmpegService } from './ffmpeg.service';
+import { VideoProcessor } from './video.processor';
 
 // Standalone application context for the video worker (phase-03-videos/TD-03).
 // It shares the API's entities, config schema and storage layer, but imports
@@ -57,5 +59,6 @@ import { VIDEO_QUEUE } from '../queue/queue.constants';
     }),
     BullModule.registerQueue({ name: VIDEO_QUEUE }),
   ],
+  providers: [FfmpegService, VideoProcessor],
 })
 export class WorkerModule {}

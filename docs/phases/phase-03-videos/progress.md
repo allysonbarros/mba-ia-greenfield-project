@@ -1,7 +1,7 @@
 # phase-03-videos — Progress
 
 **Status:** in_progress
-**SIs:** 11/14 completed
+**SIs:** 12/14 completed
 
 ### SI-03.1 — Provisionar MinIO e Redis no Compose
 - **Status:** completed
@@ -103,9 +103,15 @@
   - Testes integration do src/worker rodam DENTRO do container video-worker (única imagem com ffmpeg): `docker compose exec -T video-worker npx jest --runInBand --forceExit src/worker`. FfmpegService ainda não é registrado em módulo — instanciado direto nos testes; registro no WorkerModule vem no SI-03.12.
 
 ### SI-03.12 — Implementar VideoProcessor (consumo, transições e falhas)
-- **Status:** pending
-- **Tests:** _(not run)_
-- **Observations:** none
+- **Status:** completed
+- **Tests:** 9 passing (video.processor.spec 7 unit + video.processor.integration-spec 2 pipeline real DENTRO do video-worker)
+- **Observations:**
+  - `VideoProcessor` = `@Processor('video-processing', { concurrency: 1, lockDuration: 60_000 })` estendendo `WorkerHost`, registrado APENAS no `WorkerModule` (a API nunca consome). Carrega o vídeo por `videoId`, marca `processing_started_at`/`attempt_count`, gera presigned GET INTERNO do `original_key` como input seekable, pipeline probe → persiste duration/width/height/metadata → thumbnail → putObject em `videos/{id}/thumbnail.jpg` → CAS `processing→ready` com `processed_at`.
+  - Adicionado `StorageService.presignInternalGetUrl` (assina com o client interno `s3`, não o público) — o worker alcança o storage pela rede Compose e não deve depender do endpoint público (CDN/host externo em prod). `t` do thumbnail = `min(1, 0.1*duração)` calculado no processor.
+  - Falhas: `MediaProcessingError` (mídia inválida — PROBE_FAILED/UNSUPPORTED_MEDIA/THUMBNAIL_FAILED) → CAS `→failed` imediato + `throw UnrecoverableError` (sem retry). Erro transitório → re-throw para a política de retry do BullMQ; só persiste `→failed` (STORAGE_IO) quando esgotado. Confirmado na fonte do bullmq v5: `attemptsMade` é 0-based durante o processing e o retry ocorre enquanto `attemptsMade + 1 < attempts`; logo "esgotado" = `attemptsMade + 1 >= attempts` (o plano diz "attemptsMade === attempts", que assume 1-based — usei a semântica real verificada).
+  - Idempotência sob entrega at-least-once por duas defesas: short-circuit quando `status !== processing` na entrega sequencial, e CAS final `affected=0` na corrida concorrente (chaves determinísticas tornam overwrite seguro).
+  - `metadata` (jsonb) precisa de cast `as QueryDeepPartialEntity<Video>` no `update` — o tipo deep-partial do TypeORM não aceita objeto puro para coluna jsonb; o valor é gravado verbatim.
+  - Testes de pipeline com o processor in-process (`Test.createTestingModule({ imports: [WorkerModule] })`), esperas orientadas a evento via `job.waitUntilFinished(queueEvents)` (sem sleeps). Rodam DENTRO do video-worker (ffmpeg real). O container video-worker permanece idle (tail) — não compete pelos jobs.
 
 ### SI-03.13 — Implementar varredura de limpeza (drafts abandonados e processing travado)
 - **Status:** pending
