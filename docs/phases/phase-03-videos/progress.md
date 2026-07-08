@@ -1,7 +1,7 @@
 # phase-03-videos — Progress
 
-**Status:** in_progress
-**SIs:** 13/14 completed
+**Status:** completed
+**SIs:** 14/14 completed
 
 ### SI-03.1 — Provisionar MinIO e Redis no Compose
 - **Status:** completed
@@ -123,6 +123,10 @@
   - Integration semeia um multipart real via `createMultipartUpload`, ajusta `created_at` por SQL raw (é `@CreateDateColumn`), e afere que `ListMultipartUploads` não lista mais o upload após o sweep.
 
 ### SI-03.14 — E2E do fluxo completo, smoke cross-container e export OpenAPI
-- **Status:** pending
-- **Tests:** _(not run)_
-- **Observations:** none
+- **Status:** completed
+- **Tests:** 1 passing (test/videos.e2e-spec.ts — fluxo completo initiate→upload→complete→ready→stream→download); smoke `scripts/smoke-video-pipeline.sh` sai 0 com o worker em container real.
+- **Observations:**
+  - `test/videos.e2e-spec.ts`: fluxo completo via HTTP com MinIO/Redis/DB reais, fixture `tiny.mp4` como parte única (<5 MiB, caminho multipart legal). Processor roda in-process via um `Worker` BullMQ real construído no teste; `FfmpegService` é STUBADO (a imagem da API não tem ffmpeg — os binários reais são provados pela suíte integration do container worker e pelo smoke script, per TD-08). `waitForStatus` orientado a evento (`job.waitUntilFinished(queueEvents)`, sem sleeps).
+  - Helpers compartilhados em `test/helpers/video-pipeline.helpers.ts`: `emptyBucket` (list+delete), `drainQueue` (obliterate), `waitForStatus` (espera o job + afere status persistido).
+  - `scripts/smoke-video-pipeline.sh`: smoke compose-level cross-container. Sobe a stack, inicia o servidor da API e o WORKER REAL (`start:worker:dev`, com ffmpeg) nos containers, roda o fluxo por dentro do container da API (register→confirm via Mailpit API→login→initiate→PUT→complete) e faz poll do `GET /videos/:publicId` até `ready` — processado pelo container worker real, não in-process. Exit 0. Trap mata os dev servers (watcher + runner órfão do `nest start --watch`) devolvendo os containers ao idle. Poll de API ≤9 req para respeitar o throttler global (10/60s).
+  - `npm run openapi:export` regenerou `openapi.json` com os 5 endpoints de vídeos (`POST /videos`, `POST /videos/{publicId}/complete`, `GET /videos/{publicId}`, `GET /videos/{publicId}/stream`, `GET /videos/{publicId}/download`).
