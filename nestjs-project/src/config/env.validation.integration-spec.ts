@@ -6,6 +6,12 @@ const requiredEnv = {
   DB_NAME: 'db',
   JWT_SECRET: 'secret',
   JWT_REFRESH_SECRET: 'refresh-secret',
+  STORAGE_ENDPOINT: 'http://minio:9000',
+  STORAGE_PUBLIC_ENDPOINT: 'http://minio:9000',
+  STORAGE_ACCESS_KEY_ID: 'minioadmin',
+  STORAGE_SECRET_ACCESS_KEY: 'minioadmin',
+  STORAGE_BUCKET: 'streamtube-videos',
+  REDIS_HOST: 'redis',
 };
 
 const validate = (env: Record<string, string>) =>

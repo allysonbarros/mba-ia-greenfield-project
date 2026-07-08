@@ -1,7 +1,7 @@
 # phase-03-videos — Progress
 
 **Status:** in_progress
-**SIs:** 1/14 completed
+**SIs:** 2/14 completed
 
 ### SI-03.1 — Provisionar MinIO e Redis no Compose
 - **Status:** completed
@@ -11,9 +11,11 @@
   - Todos os 5 serviços (db, mailpit, minio, redis, nestjs-api) `healthy`; MinIO `/minio/health/live` responde 200 do host; Redis `PING`→`PONG` e `CONFIG GET appendonly`→`yes`.
 
 ### SI-03.2 — Configurar namespaces storage e queue com validação de env
-- **Status:** pending
-- **Tests:** _(not run)_
-- **Observations:** none
+- **Status:** completed
+- **Tests:** 7 passing (env.validation.spec.ts 3 novos + env.validation.integration-spec.ts 4 existentes)
+- **Observations:**
+  - Adicionar chaves `required` ao schema Joi quebraria o `env.validation.integration-spec.ts` existente (o `requiredEnv` dele não tinha as chaves novas); estendi esse `requiredEnv` com as chaves storage/queue obrigatórias — consequência direta e necessária da ação 3, mantendo a suíte verde.
+  - `env.validation.integration-spec.ts` é, na prática, um teste unitário (só valida o schema Joi, sem DB) apesar do sufixo `.integration-spec`; renomeá-lo está fora de escopo — mantido como está.
 
 ### SI-03.3 — StorageModule: dual S3 clients e StorageService
 - **Status:** pending
