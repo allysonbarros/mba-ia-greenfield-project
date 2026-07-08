@@ -241,6 +241,9 @@ _Subprojects in scope:_
 **Decision:** A (4-state enum draft/processing/ready/failed + CAS transition map)
 **Libraries:** `@nestjs/schedule@^6.1.x`
 
+**Revisions:**
+- 2026-07-08 — Stuck-processing sweep widened to also net `processing` rows with `processing_started_at` NULL (job enqueued but never picked up by a worker), anchoring the ceiling on `uploaded_at`. Rationale: LOW gap flagged by the independent verification (`docs/phases/phase-03-videos/verification.md`, gap #3) — the "worker died before the first attempt" scenario is exactly what the safety net targets; same Option A, parameter-level refinement.
+
 ---
 
 ## TD-07: Object storage usage (SDK, bucket/key layout, MinIO in Compose)

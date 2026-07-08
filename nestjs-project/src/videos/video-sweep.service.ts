@@ -2,7 +2,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import type { ConfigType } from '@nestjs/config';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
-import { LessThan, Repository } from 'typeorm';
+import { IsNull, LessThan, Repository } from 'typeorm';
 import queueConfig from '../config/queue.config';
 import storageConfig from '../config/storage.config';
 import { StorageService } from '../storage/storage.service';
@@ -66,10 +66,20 @@ export class VideoSweepService {
       Date.now() - this.queueConf.processingStuckCeilingHours * HOUR_MS,
     );
     const stuck = await this.videos.find({
-      where: {
-        status: VideoStatus.PROCESSING,
-        processing_started_at: LessThan(cutoff),
-      },
+      where: [
+        {
+          status: VideoStatus.PROCESSING,
+          processing_started_at: LessThan(cutoff),
+        },
+        // Job enqueued but never picked up (worker down before the first
+        // attempt): processing_started_at stays NULL, so anchor the ceiling
+        // on uploaded_at (set by the complete endpoint).
+        {
+          status: VideoStatus.PROCESSING,
+          processing_started_at: IsNull(),
+          uploaded_at: LessThan(cutoff),
+        },
+      ],
     });
 
     for (const video of stuck) {

@@ -75,14 +75,21 @@ describe('VideoSweepService', () => {
       );
     });
 
-    it('queries only PROCESSING rows older than the ceiling', async () => {
+    it('queries PROCESSING rows past the ceiling, including never-started (NULL) ones', async () => {
       videos.find.mockResolvedValue([]);
 
       await service.failStuckProcessing();
 
       const where = videos.find.mock.calls[0][0].where;
-      expect(where.status).toBe(VideoStatus.PROCESSING);
-      expect(where.processing_started_at).toBeInstanceOf(FindOperator);
+      expect(where).toHaveLength(2);
+      expect(where[0].status).toBe(VideoStatus.PROCESSING);
+      expect(where[0].processing_started_at).toBeInstanceOf(FindOperator);
+      // Never-picked-up branch: processing_started_at IS NULL anchored on
+      // uploaded_at — covers the "worker died before the first attempt" hole
+      // flagged by verification.md (gap #3).
+      expect(where[1].status).toBe(VideoStatus.PROCESSING);
+      expect(where[1].processing_started_at).toBeInstanceOf(FindOperator);
+      expect(where[1].uploaded_at).toBeInstanceOf(FindOperator);
     });
   });
 });
