@@ -7,9 +7,15 @@ import storageConfig from '../config/storage.config';
 import {
   VideoFileTooLargeException,
   VideoInvalidContentTypeException,
+  VideoNotFoundException,
+  VideoUploadIncompleteException,
+  VideoUploadNotCompletableException,
+  VideoUploadSizeMismatchException,
 } from '../common/exceptions/domain.exception';
 import { ChannelsService } from '../channels/channels.service';
 import { StorageService } from '../storage/storage.service';
+import { VideoQueueProducer } from '../queue/video-queue.producer';
+import { CompleteUploadDto } from './dto/complete-upload.dto';
 import { CreateVideoDto } from './dto/create-video.dto';
 import { Video, VideoStatus } from './entities/video.entity';
 import { generatePublicId } from './public-id.util';
@@ -28,6 +34,11 @@ export interface InitiateUploadResult {
     urls: { part_number: number; url: string }[];
     expires_at: string;
   };
+}
+
+export interface CompleteUploadResult {
+  public_id: string;
+  status: VideoStatus;
 }
 
 function isUniqueViolationOnColumn(error: unknown, column: string): boolean {
@@ -50,6 +61,7 @@ export class VideosService {
     @InjectRepository(Video) private readonly videos: Repository<Video>,
     private readonly storage: StorageService,
     private readonly channels: ChannelsService,
+    private readonly producer: VideoQueueProducer,
     @Inject(storageConfig.KEY)
     private readonly config: ConfigType<typeof storageConfig>,
   ) {}
@@ -116,6 +128,105 @@ export class VideosService {
         expires_at: expiresAt,
       },
     };
+  }
+
+  /**
+   * Closes the multipart upload, verifies the real object and transitions
+   * draft→processing via compare-and-swap, then enqueues the processing job.
+   * Idempotent: a repeated complete on a video already past `draft` returns the
+   * current status without re-enqueuing (phase-03-videos/TD-02 + TD-06).
+   */
+  async completeUpload(
+    userId: string,
+    publicId: string,
+    dto: CompleteUploadDto,
+  ): Promise<CompleteUploadResult> {
+    const channel = await this.channels.findByUserId(userId);
+    if (!channel) {
+      throw new Error(`No channel found for user ${userId}`);
+    }
+
+    const video = await this.videos.findOne({
+      where: { public_id: publicId },
+    });
+    // 404 without existence leak: unknown id OR another channel's video.
+    if (!video || video.channel_id !== channel.id) {
+      throw new VideoNotFoundException();
+    }
+
+    // Short-circuit before touching storage: idempotent for already-advanced
+    // videos, terminal for failed ones.
+    if (
+      video.status === VideoStatus.PROCESSING ||
+      video.status === VideoStatus.READY
+    ) {
+      return { public_id: video.public_id, status: video.status };
+    }
+    if (video.status === VideoStatus.FAILED) {
+      throw new VideoUploadNotCompletableException();
+    }
+
+    const uploadId = video.upload_id!;
+    const parts = dto.parts.map((p) => ({
+      partNumber: p.part_number,
+      etag: p.etag,
+    }));
+
+    try {
+      await this.storage.completeMultipartUpload(
+        video.original_key,
+        uploadId,
+        parts,
+      );
+    } catch {
+      throw new VideoUploadIncompleteException();
+    }
+
+    const head = await this.storage.headObject(video.original_key);
+    if (
+      head.contentLength > MAX_VIDEO_FILE_SIZE_BYTES ||
+      head.contentLength !== video.file_size
+    ) {
+      await this.storage
+        .abortMultipartUpload(video.original_key, uploadId)
+        .catch(() => undefined);
+      await this.videos.update(
+        { id: video.id, status: VideoStatus.DRAFT },
+        {
+          status: VideoStatus.FAILED,
+          error_code: 'VIDEO_UPLOAD_SIZE_MISMATCH',
+          error_message: `Real size ${head.contentLength} != declared ${video.file_size}`,
+          upload_id: null,
+          processed_at: new Date(),
+        },
+      );
+      throw new VideoUploadSizeMismatchException();
+    }
+
+    const cas = await this.videos.update(
+      { id: video.id, status: VideoStatus.DRAFT },
+      {
+        status: VideoStatus.PROCESSING,
+        uploaded_at: new Date(),
+        upload_id: null,
+      },
+    );
+    if (cas.affected === 0) {
+      // A concurrent writer advanced the row — report its current state.
+      const current = await this.videos.findOneByOrFail({ id: video.id });
+      if (current.status === VideoStatus.FAILED) {
+        throw new VideoUploadNotCompletableException();
+      }
+      return { public_id: current.public_id, status: current.status };
+    }
+
+    await this.producer.enqueueProcessing(
+      video.id,
+      this.config.bucket,
+      video.original_key,
+    );
+
+    return { public_id: video.public_id, status: VideoStatus.PROCESSING };
   }
 
   // Inserts the draft row, regenerating public_id and retrying once on a

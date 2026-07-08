@@ -1,7 +1,15 @@
-import { Body, Controller, HttpCode, HttpStatus, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Post,
+} from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiOperation,
+  ApiParam,
   ApiResponse,
   ApiTags,
   getSchemaPath,
@@ -9,8 +17,13 @@ import {
 import { ApiErrorEnvelope } from '../common/openapi/api-error-envelope.dto';
 import type { JwtPayload } from '../auth/auth.types';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { CompleteUploadDto } from './dto/complete-upload.dto';
 import { CreateVideoDto } from './dto/create-video.dto';
-import { InitiateUploadResult, VideosService } from './videos.service';
+import {
+  CompleteUploadResult,
+  InitiateUploadResult,
+  VideosService,
+} from './videos.service';
 
 @ApiTags('videos')
 @Controller('videos')
@@ -71,5 +84,53 @@ export class VideosController {
     @Body() dto: CreateVideoDto,
   ): Promise<InitiateUploadResult> {
     return this.videosService.initiateUpload(user.sub, dto);
+  }
+
+  @Post(':publicId/complete')
+  @HttpCode(HttpStatus.OK)
+  @ApiBearerAuth('access-token')
+  @ApiParam({ name: 'publicId', description: 'Public identifier of the video' })
+  @ApiOperation({
+    summary: 'Complete a video upload',
+    description:
+      'Closes the multipart upload, verifies the object, transitions the video ' +
+      'to processing and enqueues the processing job. Idempotent on repeat.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Upload completed; video transitioning to processing',
+    schema: {
+      properties: {
+        public_id: { type: 'string', example: 'dQw4w9WgXcQ' },
+        status: { type: 'string', example: 'processing' },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'VIDEO_UPLOAD_INCOMPLETE, VIDEO_UPLOAD_SIZE_MISMATCH or validation error',
+    schema: { $ref: getSchemaPath(ApiErrorEnvelope) },
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Missing or invalid access token',
+    schema: { $ref: getSchemaPath(ApiErrorEnvelope) },
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'VIDEO_NOT_FOUND (unknown video or not owned by the caller)',
+    schema: { $ref: getSchemaPath(ApiErrorEnvelope) },
+  })
+  @ApiResponse({
+    status: 409,
+    description: 'VIDEO_UPLOAD_NOT_COMPLETABLE (video in failed status)',
+    schema: { $ref: getSchemaPath(ApiErrorEnvelope) },
+  })
+  async complete(
+    @CurrentUser() user: JwtPayload,
+    @Param('publicId') publicId: string,
+    @Body() dto: CompleteUploadDto,
+  ): Promise<CompleteUploadResult> {
+    return this.videosService.completeUpload(user.sub, publicId, dto);
   }
 }

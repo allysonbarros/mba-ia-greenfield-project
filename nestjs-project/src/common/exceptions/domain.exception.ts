@@ -64,3 +64,39 @@ export class VideoInvalidContentTypeException extends DomainException {
     );
   }
 }
+
+export class VideoNotFoundException extends DomainException {
+  constructor() {
+    super('VIDEO_NOT_FOUND', 404, 'Video not found');
+  }
+}
+
+export class VideoUploadIncompleteException extends DomainException {
+  constructor() {
+    super(
+      'VIDEO_UPLOAD_INCOMPLETE',
+      400,
+      'Multipart upload could not be completed — object missing or parts invalid',
+    );
+  }
+}
+
+export class VideoUploadSizeMismatchException extends DomainException {
+  constructor() {
+    super(
+      'VIDEO_UPLOAD_SIZE_MISMATCH',
+      400,
+      'Uploaded object size exceeds the limit or diverges from the declared size',
+    );
+  }
+}
+
+export class VideoUploadNotCompletableException extends DomainException {
+  constructor() {
+    super(
+      'VIDEO_UPLOAD_NOT_COMPLETABLE',
+      409,
+      'Video upload cannot be completed from its current status',
+    );
+  }
+}

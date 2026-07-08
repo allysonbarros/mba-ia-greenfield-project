@@ -1,7 +1,7 @@
 # phase-03-videos — Progress
 
 **Status:** in_progress
-**SIs:** 6/14 completed
+**SIs:** 7/14 completed
 
 ### SI-03.1 — Provisionar MinIO e Redis no Compose
 - **Status:** completed
@@ -55,9 +55,14 @@
   - Exceções de domínio de vídeo adicionadas ao arquivo compartilhado `common/exceptions/domain.exception.ts` (mesma convenção das exceções de auth).
 
 ### SI-03.7 — Implementar complete upload e enfileiramento (POST /videos/:publicId/complete)
-- **Status:** pending
-- **Tests:** _(not run)_
-- **Observations:** none
+- **Status:** completed
+- **Tests:** 15 passing (videos.service.spec 8 unit [3 initiate + 5 complete], videos.module.spec 1, videos-upload.integration-spec 1, videos-complete.e2e-spec 5)
+- **Observations:**
+  - SPEC_DEVIATION: os testes (integration + e2e) sobem um Buffer inline em vez de `test/fixtures/tiny.mp4`. Essa fixture é deliverable do SI-03.11 (exige ffmpeg, ausente no container da API) e o complete só valida ETags/tamanho — bytes crus dão a mesma cobertura. Idem para os helpers `emptyBucket()`/`drainQueue()` (deliverable do SI-03.14): inlinei a limpeza (`queue.obliterate`, `deleteObjects`).
+  - Nuance de semântica S3: na divergência de tamanho o `CompleteMultipartUpload` já teve sucesso (o objeto materializa só após o Complete), então o `AbortMultipartUpload` seguinte é no-op (upload já consumido) e é engolido pelo `.catch`. O objeto completo fica órfão no bucket até o sweep (SI-03.13). O plano pede "AbortMultipartUpload"; segui literalmente. A asserção do spec "ListMultipartUploads não lista o upload_id" passa porque uploads completados não são listados como pendentes.
+  - Idempotência do complete é resolvida por short-circuit de status (processing/ready→200, failed→409) ANTES de tocar o storage, além do CAS `affected=0` para corrida concorrente.
+  - Interpretação de campo: spec diz `body.errorCode`; filtro emite `body.error` (mesma convenção do SI-03.6).
+  - VideosModule passou a importar QueueModule; `videos.module.spec.ts` atualizado para carregar `queueConfig`; `videos.service.spec.ts` recebeu o mock do `VideoQueueProducer`.
 
 ### SI-03.8 — Implementar consulta de vídeo (GET /videos/:publicId)
 - **Status:** pending
