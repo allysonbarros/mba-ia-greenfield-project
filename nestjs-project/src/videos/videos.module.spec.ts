@@ -1,5 +1,7 @@
 import { Test } from '@nestjs/testing';
+import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import storageConfig from '../config/storage.config';
 import { RefreshToken } from '../auth/entities/refresh-token.entity';
 import { VerificationToken } from '../auth/entities/verification-token.entity';
 import { Channel } from '../channels/entities/channel.entity';
@@ -11,9 +13,10 @@ import { VideosModule } from './videos.module';
 const ALL_ENTITIES = [User, Channel, RefreshToken, VerificationToken, Video];
 
 describe('VideosModule', () => {
-  it('should compile with TypeOrmModule.forFeature([Video])', async () => {
+  it('should compile with the videos controller, service and storage/channels deps', async () => {
     const module = await Test.createTestingModule({
       imports: [
+        ConfigModule.forRoot({ isGlobal: true, load: [storageConfig] }),
         TypeOrmModule.forRoot(
           createTestDataSource(ALL_ENTITIES, { synchronize: false }).options,
         ),

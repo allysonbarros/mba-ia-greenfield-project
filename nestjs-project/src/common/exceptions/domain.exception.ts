@@ -48,3 +48,19 @@ export class TokenReuseDetectedException extends DomainException {
     );
   }
 }
+
+export class VideoFileTooLargeException extends DomainException {
+  constructor() {
+    super('VIDEO_FILE_TOO_LARGE', 400, 'Video file exceeds the 10 GiB limit');
+  }
+}
+
+export class VideoInvalidContentTypeException extends DomainException {
+  constructor() {
+    super(
+      'VIDEO_INVALID_CONTENT_TYPE',
+      400,
+      'content_type must be a video/* media type',
+    );
+  }
+}

@@ -59,4 +59,10 @@ export class ChannelsService {
       );
     });
   }
+
+  async findByUserId(userId: string): Promise<Channel | null> {
+    return this.dataSource
+      .getRepository(Channel)
+      .findOneBy({ user_id: userId });
+  }
 }

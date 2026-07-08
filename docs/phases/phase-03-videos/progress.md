@@ -1,7 +1,7 @@
 # phase-03-videos — Progress
 
 **Status:** in_progress
-**SIs:** 5/14 completed
+**SIs:** 6/14 completed
 
 ### SI-03.1 — Provisionar MinIO e Redis no Compose
 - **Status:** completed
@@ -45,9 +45,14 @@
   - Instalados `bullmq@^5.79.3` e `@nestjs/bullmq@^11.0.4` no container.
 
 ### SI-03.6 — Implementar initiate upload (POST /videos)
-- **Status:** pending
-- **Tests:** _(not run)_
-- **Observations:** none
+- **Status:** completed
+- **Tests:** 9 passing (videos.service.spec 3 unit + videos.module.spec 1 + videos-initiate.e2e-spec 5)
+- **Observations:**
+  - Teto 10 GiB e regra `content_type video/*` são aplicados no SERVICE (não no DTO) para carregarem os errorCodes de domínio `VIDEO_FILE_TOO_LARGE`/`VIDEO_INVALID_CONTENT_TYPE`; o DTO valida só formato genérico (int ≥1, string) — senão o ValidationPipe rejeitaria antes com `VALIDATION_ERROR` genérico e os testes 1.2/1.3 falhariam.
+  - Interpretação do spec: os cenários dizem `body.errorCode`, mas o filtro de domínio do projeto (herdado da fase 02) emite `{ statusCode, error, message }`; então o e2e afere `res.body.error` (campo real), consistente com os e2e de auth.
+  - Adicionado `ChannelsService.findByUserId` (resolução do canal do usuário logado é domínio de channels, não de videos — Single Responsibility). VideosModule passou a importar ChannelsModule + StorageModule.
+  - `videos.module.spec.ts` (criado no SI-03.4) atualizado para injetar `ConfigModule` com `storageConfig` — consequência de VideosModule agora importar StorageModule.
+  - Exceções de domínio de vídeo adicionadas ao arquivo compartilhado `common/exceptions/domain.exception.ts` (mesma convenção das exceções de auth).
 
 ### SI-03.7 — Implementar complete upload e enfileiramento (POST /videos/:publicId/complete)
 - **Status:** pending
