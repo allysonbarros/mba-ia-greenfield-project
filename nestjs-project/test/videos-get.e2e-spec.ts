@@ -149,7 +149,8 @@ describe('videos-get', () => {
   });
 
   it('1.3 lets the owner see a processing video but hides it from other users', async () => {
-    const { token, channel } = await registerConfirmAndLogin('get3@example.com');
+    const { token, channel } =
+      await registerConfirmAndLogin('get3@example.com');
     const video = await seedVideo(channel.id, {
       public_id: 'processing2',
       status: VideoStatus.PROCESSING,

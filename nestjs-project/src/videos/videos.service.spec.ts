@@ -299,7 +299,9 @@ describe('VideosService', () => {
 
     it('presigns an inline playback URL for a ready video (playback expiry, no disposition)', async () => {
       videoRepo.findOne.mockResolvedValue({ ...readyVideo });
-      storage.presignGetUrl.mockResolvedValue('https://minio.local/play?signed');
+      storage.presignGetUrl.mockResolvedValue(
+        'https://minio.local/play?signed',
+      );
 
       const url = await service.getStreamUrl('abcdefghijk');
 

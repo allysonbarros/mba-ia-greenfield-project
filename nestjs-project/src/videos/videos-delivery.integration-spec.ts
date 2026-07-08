@@ -76,7 +76,10 @@ describe('Video delivery (integration)', () => {
     publicId: string,
   ): Promise<string> {
     const user = await userRepo.save(
-      userRepo.create({ email: `del_${randomUUID()}@example.com`, password: 'h' }),
+      userRepo.create({
+        email: `del_${randomUUID()}@example.com`,
+        password: 'h',
+      }),
     );
     const channel = await channelRepo.save(
       channelRepo.create({
