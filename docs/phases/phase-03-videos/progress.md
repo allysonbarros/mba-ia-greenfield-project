@@ -1,7 +1,7 @@
 # phase-03-videos — Progress
 
 **Status:** in_progress
-**SIs:** 4/14 completed
+**SIs:** 5/14 completed
 
 ### SI-03.1 — Provisionar MinIO e Redis no Compose
 - **Status:** completed
@@ -37,9 +37,12 @@
   - Colunas de timestamp usam `timestamptz` (byte-verbatim do Data Model), diferente do `TIMESTAMP` das tabelas herdadas da fase 01.
 
 ### SI-03.5 — Configurar QueueModule (BullMQ) e producer de jobs
-- **Status:** pending
-- **Tests:** _(not run)_
-- **Observations:** none
+- **Status:** completed
+- **Tests:** 3 passing (queue.module.spec 1 + video-queue.producer.integration-spec 2 contra Redis real)
+- **Observations:**
+  - Fila registrada via `BullModule.registerQueueAsync` (não `registerQueue`) porque `attempts` vem da config (`VIDEO_PROCESSING_ATTEMPTS`); backoff exponencial + `removeOnComplete: 1000` / `removeOnFail: false`.
+  - `queue.module.spec.ts` é `.spec.ts` por nome do plano, mas a `Queue` do BullMQ abre conexão Redis ao ser instanciada — então tecnicamente toca infra real. Mantido o nome do plano; roda contra o Redis do Compose (TD-08). `--forceExit` evita hang por handles abertos.
+  - Instalados `bullmq@^5.79.3` e `@nestjs/bullmq@^11.0.4` no container.
 
 ### SI-03.6 — Implementar initiate upload (POST /videos)
 - **Status:** pending
