@@ -35,12 +35,12 @@ describe('Database migrations (integration)', () => {
 
     await dataSource.initialize();
 
-    await Promise.all([
-      ...MANAGED_TABLES.map((table) =>
-        dataSource.query(`DROP TABLE IF EXISTS "${table}" CASCADE`),
-      ),
-      dataSource.query(`DROP TABLE IF EXISTS "migrations" CASCADE`),
-    ]);
+    // Drop sequentially, not via Promise.all: concurrent DROP TABLE CASCADE on
+    // FK-interdependent tables acquires locks in conflicting orders and
+    // deadlocks (flaky under the full --runInBand suite).
+    for (const table of [...MANAGED_TABLES, 'migrations']) {
+      await dataSource.query(`DROP TABLE IF EXISTS "${table}" CASCADE`);
+    }
     // DROP TABLE CASCADE does not remove enum types; without this the suite
     // is non-reentrant against an already-migrated database.
     await dataSource.query(
