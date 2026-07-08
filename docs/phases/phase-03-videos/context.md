@@ -3,7 +3,7 @@ kind: phase
 name: phase-03-videos
 sources_mtime:
   docs/project-plan.md: "2026-07-08T10:44:24-03:00"
-  docs/decisions/technical-decisions-phase-03-videos.md: "2026-07-08T11:24:17-03:00"
+  docs/decisions/technical-decisions-phase-03-videos.md: "2026-07-08T12:20:04-03:00"
   docs/decisions/technical-decisions-openapi-docs-nestjs.md: "2026-07-08T10:44:24-03:00"
   docs/phases/phase-01-configuracao-base/context.md: "2026-07-08T10:44:24-03:00"
   docs/phases/phase-02-auth/context.md: "2026-07-08T10:44:24-03:00"
@@ -48,14 +48,14 @@ sources_mtime:
 
 | Ref | Source | Scope | Topic | Status | Decision | Libraries |
 |-----|--------|-------|-------|--------|----------|-----------|
-| phase-03-videos/TD-01 | phase | Backend | Queue technology for background video processing | pending | — | — |
-| phase-03-videos/TD-02 | phase | Cross-layer | Upload strategy for 10GB files (direct-to-storage) | pending | — | — |
-| phase-03-videos/TD-03 | phase | Backend | Worker topology and FFmpeg integration | pending | — | — |
-| phase-03-videos/TD-04 | phase | Cross-layer | Streaming playback and download delivery | pending | — | — |
-| phase-03-videos/TD-05 | phase | Backend | Unique public URL strategy | pending | — | — |
-| phase-03-videos/TD-06 | phase | Backend | Video status lifecycle and failure handling | pending | — | — |
-| phase-03-videos/TD-07 | phase | Backend | Object storage usage (SDK, bucket/key layout, MinIO in Compose) | pending | — | — |
-| phase-03-videos/TD-08 | phase | Backend | Testing strategy for the new infrastructure | pending | — | — |
+| phase-03-videos/TD-01 | phase | Backend | Queue technology for background video processing | decided | A (BullMQ + @nestjs/bullmq, Redis in Compose) | `bullmq@^5.79.x`, `@nestjs/bullmq@^11.0.x` |
+| phase-03-videos/TD-02 | phase | Cross-layer | Upload strategy for 10GB files (direct-to-storage) | decided | A (presigned multipart, client-called complete) | — |
+| phase-03-videos/TD-03 | phase | Backend | Worker topology and FFmpeg integration | decided | A (standalone app-context worker + child_process ffprobe/ffmpeg via apt) | — |
+| phase-03-videos/TD-04 | phase | Cross-layer | Streaming playback and download delivery | decided | A (302 → presigned GET, inline + attachment) | — |
+| phase-03-videos/TD-05 | phase | Backend | Unique public URL strategy | decided | A (zero-dep 11-char base64url public_id) | — |
+| phase-03-videos/TD-06 | phase | Backend | Video status lifecycle and failure handling | decided | A (4-state enum + CAS transition map) | `@nestjs/schedule@^6.1.x` |
+| phase-03-videos/TD-07 | phase | Backend | Object storage usage (SDK, bucket/key layout, MinIO in Compose) | decided | A (AWS SDK v3 dual-client, single bucket, pinned MinIO image) | `@aws-sdk/client-s3@^3.x`, `@aws-sdk/s3-request-presigner@^3.x`, `@aws-sdk/lib-storage@^3.x` |
+| phase-03-videos/TD-08 | phase | Backend | Testing strategy for the new infrastructure | decided | A (shared Compose services, fixed test bucket, event-driven waits) | — |
 
 _Source files:_
 
@@ -77,7 +77,45 @@ _Source files:_
 
 ## Decisions Detail
 
-_No decided TDs yet — all 8 TDs are `pending` (research recommendations recorded; awaiting /plan-resolve)._
+### phase-03-videos/TD-01
+
+**Recommendation:** RabbitMQ is eliminated (no job semantics, 30-min ack timeout vs long encodes, heaviest footprint). BullMQ and pg-boss are honestly near-equivalent at this throughput and pg-boss is a close second (transactional enqueue, zero new infra); BullMQ wins on the criteria the phase names: official NestJS 11 integration consistent with prior Nest-ecosystem picks, built-in progress/observability, a clean documented separate-worker story, and a small prod-portable Redis whose cost is amortized by future reuse. Mitigations adopted: `jobId = videoId` idempotent enqueue, reconciliation sweep, Redis with `appendonly yes` + named volume, hosts via Compose service name (`redis`).
+**Libraries:** `bullmq@^5.79.x`, `@nestjs/bullmq@^11.0.x`
+
+### phase-03-videos/TD-02
+
+**Recommendation:** the only option satisfying all constraints simultaneously. Within the choice: parts of 64–128 MiB presigned upfront with hours-long `expiresIn`; completion signaled by the client calling `POST .../complete` (not MinIO bucket notifications — admin-config, non-portable to S3's SNS/SQS event surface, and the API must own the state transition anyway); `HeadObject` validation before transitioning; dual-endpoint S3 client config per TD-07.
+**Libraries:** —
+
+### phase-03-videos/TD-03
+
+**Recommendation:** Option A delivers mandatory process isolation with zero restructuring and shares entities/config by construction. FFmpeg wrapper libs are ruled out on facts: `fluent-ffmpeg` archived 2025-05-22; `execa` 9.x is ESM-only and fails `tsc --noEmit` (TS1479) under this CJS TS 5.7 build. The two needed commands are static-argv and trivial (`ffprobe -print_format json -show_format -show_streams`; `ffmpeg -ss <t> -i <input> -frames:v 1 -vf scale=640:-2`). Large-file pattern: never pipe MP4 into ffprobe via stdin (trailing moov atom fails on non-seekable input) — pass a presigned GET URL as seekable input (ffmpeg's HTTP reader issues Range requests), avoiding a 10GB copy to worker disk; fall back to tmp-file download if URL seeking proves unreliable.
+**Libraries:** —
+
+### phase-03-videos/TD-04
+
+**Recommendation:** the same physics that forbids upload passthrough eliminates the proxy paths. Sub-decisions: playback URL expiry ~6h, download ~15min; both presigned by the public-endpoint client from TD-07. Boundary statement: HLS/ABR transcoding is explicitly OUT of scope (the plan asks only duration/metadata/thumbnail); delivery is progressive MP4 over HTTP Range, and a future `-movflags +faststart` remux is the natural extension point, not part of this phase.
+**Libraries:** —
+
+### phase-03-videos/TD-05
+
+**Recommendation:** Options A and B produce byte-identical IDs; the decision is purely dependency mechanics, and there the stack is decisive: nanoid v5 breaks the `tsc --noEmit` DoD gate under TS 5.7/CJS. Owning a 10-line bias-free generator beats upgrading TypeScript as a side effect of an ID choice or pinning a legacy major.
+**Libraries:** —
+
+### phase-03-videos/TD-06
+
+**Recommendation:** both writers are first-party, so app-layer enforcement suffices, and TypeORM's `update()` + `affected` already provides the CAS primitive. Protocol: (1) API creates `draft` when issuing the presigned upload; (2) on complete, `HeadObject` → CAS `draft→processing` → enqueue with `jobId = videoId` (double-enqueue dedupes; double-complete returns idempotent response); (3) worker CAS `processing→ready` on success and `processing→failed` only on attempts-exhausted or unrecoverable errors (persisting `error_code`/`error_message`); (4) worker-crash recovery delegated to the queue's stalled-job mechanism; (5) abandoned drafts: scheduled sweep (`@nestjs/schedule`) aborts stale multipart uploads and expires old drafts; the same sweep nets stuck `processing` rows to `failed` past a hard ceiling.
+**Libraries:** `@nestjs/schedule@^6.1.x`
+
+### phase-03-videos/TD-07
+
+**Recommendation:** the 10GB requirement decides the SDK (presigned multipart), and prod portability decides against minio-js. Layout: ONE bucket (`STORAGE_BUCKET`) with keys `videos/{videoId}/original.{ext}` and `videos/{videoId}/thumbnail.jpg` — keys (never URLs) stored in DB columns; UUID key-cardinality makes per-prefix rate limits a non-issue; separate buckets would double provisioning/env surface for nothing. Compose: pin the last community image (`minio/minio:RELEASE.2025-04-22T22-12-26Z`, documenting that it carries unpatched CVE-2025-62506 — acceptable dev-only since exploitation requires an authenticated IAM user and prod uses real S3); healthcheck `curl -f http://localhost:9000/minio/health/live` (localhost is correct inside a healthcheck — documented exception to the service-name rule); named volume. Provisioning: app-side ensure-bucket (`HeadBucket` → `CreateBucket`) in `StorageModule.onModuleInit` gated by `STORAGE_AUTO_CREATE_BUCKET` (true in dev/test, false in prod where IaC owns buckets) — preferred over an `mc` init container frozen by the same image discontinuation. Env keys under `registerAs('storage')` + Joi: `STORAGE_ENDPOINT`, `STORAGE_PUBLIC_ENDPOINT`, `STORAGE_REGION`, `STORAGE_ACCESS_KEY_ID`, `STORAGE_SECRET_ACCESS_KEY`, `STORAGE_BUCKET`, `STORAGE_FORCE_PATH_STYLE`, `STORAGE_AUTO_CREATE_BUCKET`.
+**Libraries:** `@aws-sdk/client-s3@^3.x`, `@aws-sdk/s3-request-presigner@^3.x`, `@aws-sdk/lib-storage@^3.x`
+
+### phase-03-videos/TD-08
+
+**Recommendation:** the only option that simultaneously satisfies the challenge mandate, the locked execution model, and the documented external-systems strategy. Key sub-decisions: (1) e2e without 10GB files — commit a tiny real MP4 fixture (`test/fixtures/tiny.mp4`, <100KB, regenerable via `ffmpeg -f lavfi -i testsrc=duration=1:size=128x72:rate=10 -pix_fmt yuv420p`; committed because ffmpeg is absent from the API image); S3's 5 MiB minimum part size applies to every part EXCEPT the last, so a 100KB file legally drives the exact multipart code path (CreateMultipartUpload → UploadPart #1 → Complete). (2) Presigned URLs are integration-tested by actually PUT/GETting through them against MinIO — `getSignedUrl` is purely local computation, so only MinIO validates endpoint/path-style/signature bugs. (3) Worker FFmpeg pipeline: own `*.integration-spec.ts` suite run inside the worker container, invoking the processor function directly with the fixture and asserting DB status + MinIO objects; the cross-container API→queue→worker flow is a compose-level smoke script, not a Jest suite. (4) Legitimately unit/mocked: service branch logic against storage/queue ports, ffprobe JSON parsing against a committed fixture, presign option math.
+**Libraries:** —
 
 ## Inherited Decisions Detail
 
