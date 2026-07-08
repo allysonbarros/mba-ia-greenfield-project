@@ -6,6 +6,7 @@ import { StorageModule } from '../storage/storage.module';
 import { Video } from './entities/video.entity';
 import { VideosController } from './videos.controller';
 import { VideosService } from './videos.service';
+import { VideoSweepService } from './video-sweep.service';
 
 @Module({
   imports: [
@@ -15,6 +16,6 @@ import { VideosService } from './videos.service';
     QueueModule,
   ],
   controllers: [VideosController],
-  providers: [VideosService],
+  providers: [VideosService, VideoSweepService],
 })
 export class VideosModule {}

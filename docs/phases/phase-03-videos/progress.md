@@ -1,7 +1,7 @@
 # phase-03-videos — Progress
 
 **Status:** in_progress
-**SIs:** 12/14 completed
+**SIs:** 13/14 completed
 
 ### SI-03.1 — Provisionar MinIO e Redis no Compose
 - **Status:** completed
@@ -114,9 +114,13 @@
   - Testes de pipeline com o processor in-process (`Test.createTestingModule({ imports: [WorkerModule] })`), esperas orientadas a evento via `job.waitUntilFinished(queueEvents)` (sem sleeps). Rodam DENTRO do video-worker (ffmpeg real). O container video-worker permanece idle (tail) — não compete pelos jobs.
 
 ### SI-03.13 — Implementar varredura de limpeza (drafts abandonados e processing travado)
-- **Status:** pending
-- **Tests:** _(not run)_
-- **Observations:** none
+- **Status:** completed
+- **Tests:** 8 passing (video-sweep.service.spec 5 unit + video-sweep.integration-spec 3 contra DB+MinIO reais)
+- **Observations:**
+  - `VideoSweepService` com `@Cron(CronExpression.EVERY_HOUR, { name: 'video-reconciliation-sweep' })`. `expireStaleDrafts`: drafts com `created_at` além de `UPLOAD_STALE_TTL_HOURS` → `abortMultipartUpload` (se `upload_id`) + `delete` da linha. `failStuckProcessing`: `processing` com `processing_started_at` além de `PROCESSING_STUCK_CEILING_HOURS` → CAS `→failed` com `error_code: STUCK_TIMEOUT`. Ready/failed nunca são consultados (queries filtram por status DRAFT/PROCESSING).
+  - Instalado `@nestjs/schedule@^6.1.3` DENTRO do container. `ScheduleModule.forRoot()` registrado no `AppModule` (o sweep é concern da API, não do worker — WorkerModule não importa ScheduleModule/VideosModule); `VideoSweepService` provido no `VideosModule`. Boot da app com ScheduleModule validado (videos-get e2e verde).
+  - Nota sobre `processing_started_at`: keyado literalmente no plano/AC. Um vídeo em `processing` nunca coletado pelo worker teria `processing_started_at` null e não seria pego pelo sweep — segui o contrato do plano (o worker seta esse campo ao iniciar; testes semeiam com o campo no passado).
+  - Integration semeia um multipart real via `createMultipartUpload`, ajusta `created_at` por SQL raw (é `@CreateDateColumn`), e afere que `ListMultipartUploads` não lista mais o upload após o sweep.
 
 ### SI-03.14 — E2E do fluxo completo, smoke cross-container e export OpenAPI
 - **Status:** pending
