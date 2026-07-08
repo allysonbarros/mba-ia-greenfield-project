@@ -1,7 +1,7 @@
 # phase-03-videos — Progress
 
 **Status:** in_progress
-**SIs:** 7/14 completed
+**SIs:** 8/14 completed
 
 ### SI-03.1 — Provisionar MinIO e Redis no Compose
 - **Status:** completed
@@ -65,9 +65,14 @@
   - VideosModule passou a importar QueueModule; `videos.module.spec.ts` atualizado para carregar `queueConfig`; `videos.service.spec.ts` recebeu o mock do `VideoQueueProducer`.
 
 ### SI-03.8 — Implementar consulta de vídeo (GET /videos/:publicId)
-- **Status:** pending
-- **Tests:** _(not run)_
-- **Observations:** none
+- **Status:** completed
+- **Tests:** 15 passing (videos.service.spec 11 unit [3 initiate + 5 complete + 3 findByPublicId], videos-get.e2e-spec 4)
+- **Observations:**
+  - Optional-auth implementado no `JwtAuthGuard`: rota `@Public` nunca rejeita, mas se um Bearer válido estiver presente anexa `request.user` (token inválido em rota pública → tratado como anônimo). Habilita a visão de dono sem duplicar guard. Mudança é benigna para as rotas `@Public` herdadas (login/register) — sem Authorization, `hasBearer=false`, comportamento inalterado.
+  - `findByPublicId(publicId, requestingUserId?)` aplica a regra AMB-1: `ready` visível a qualquer caller; `draft`/`processing`/`failed` só ao dono (senão `VIDEO_NOT_FOUND`, sem vazamento de existência). `thumbnail_url` presigned só quando `ready`+`thumbnail_key`; `error_code` incluído no payload apenas para o dono (spread condicional — campo ausente para não-donos).
+  - `PublicIdParamDto` com `@Matches(/^[A-Za-z0-9_-]{11}$/)` valida o param via ValidationPipe global → 400 em formato inválido.
+  - Interpretação de campo (consistente com SI-03.6/03.7): o plano/spec escreve `body.errorCode`, mas o filtro de domínio emite `{ statusCode, error, message }`; o e2e afere `res.body.error`.
+  - E2E semeia vídeos direto no banco (`videoRepository.save`) nos estados necessários; canal do usuário resolvido decodificando o `sub` do access token e buscando por `user_id` (helper retorna `{ token, channel }`). `public_id` limitado a varchar(11) — fixtures usam exatamente 11 chars.
 
 ### SI-03.9 — Infra do worker: imagem com FFmpeg e serviço video-worker no Compose
 - **Status:** pending

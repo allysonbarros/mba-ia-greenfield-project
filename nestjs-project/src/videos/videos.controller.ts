@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Get,
   HttpCode,
   HttpStatus,
   Param,
@@ -17,11 +18,14 @@ import {
 import { ApiErrorEnvelope } from '../common/openapi/api-error-envelope.dto';
 import type { JwtPayload } from '../auth/auth.types';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { Public } from '../auth/decorators/public.decorator';
 import { CompleteUploadDto } from './dto/complete-upload.dto';
 import { CreateVideoDto } from './dto/create-video.dto';
+import { PublicIdParamDto } from './dto/public-id-param.dto';
 import {
   CompleteUploadResult,
   InitiateUploadResult,
+  VideoDetailResult,
   VideosService,
 } from './videos.service';
 
@@ -133,5 +137,60 @@ export class VideosController {
     @Body() dto: CompleteUploadDto,
   ): Promise<CompleteUploadResult> {
     return this.videosService.completeUpload(user.sub, publicId, dto);
+  }
+
+  @Get(':publicId')
+  @Public()
+  @HttpCode(HttpStatus.OK)
+  @ApiParam({ name: 'publicId', description: 'Public identifier of the video' })
+  @ApiOperation({
+    summary: 'Get a video by its public id',
+    description:
+      'Returns the video metadata and status. `ready` videos are visible to ' +
+      'anyone; non-`ready` videos are visible only to their owner (a valid ' +
+      'optional bearer token enables the owner view). No existence leak.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Video metadata',
+    schema: {
+      properties: {
+        public_id: { type: 'string', example: 'dQw4w9WgXcQ' },
+        title: { type: 'string' },
+        description: { type: 'string', nullable: true },
+        status: { type: 'string', example: 'ready' },
+        duration_seconds: { type: 'number', nullable: true },
+        width: { type: 'number', nullable: true },
+        height: { type: 'number', nullable: true },
+        thumbnail_url: { type: 'string', nullable: true },
+        created_at: { type: 'string', format: 'date-time' },
+        channel: {
+          type: 'object',
+          properties: {
+            id: { type: 'string', format: 'uuid' },
+            name: { type: 'string' },
+            nickname: { type: 'string' },
+          },
+        },
+        error_code: { type: 'string', nullable: true },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'publicId does not match the [A-Za-z0-9_-]{11} format',
+    schema: { $ref: getSchemaPath(ApiErrorEnvelope) },
+  })
+  @ApiResponse({
+    status: 404,
+    description:
+      'VIDEO_NOT_FOUND (unknown video, or not visible to the caller)',
+    schema: { $ref: getSchemaPath(ApiErrorEnvelope) },
+  })
+  async findOne(
+    @Param() params: PublicIdParamDto,
+    @CurrentUser() user?: JwtPayload,
+  ): Promise<VideoDetailResult> {
+    return this.videosService.findByPublicId(params.publicId, user?.sub);
   }
 }

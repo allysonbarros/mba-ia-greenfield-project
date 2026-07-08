@@ -22,14 +22,28 @@ export class JwtAuthGuard implements CanActivate {
       context.getHandler(),
       context.getClass(),
     ]);
-    if (isPublic) return true;
 
     const request = context
       .switchToHttp()
       .getRequest<{ headers: Record<string, string>; user: unknown }>();
     const authHeader = request.headers?.authorization;
+    const hasBearer = !!authHeader && authHeader.startsWith(BEARER_PREFIX);
 
-    if (!authHeader || !authHeader.startsWith(BEARER_PREFIX)) {
+    if (isPublic) {
+      // Optional-auth: on a public route we never reject, but if a valid token
+      // is present we attach the user so handlers can enable the owner view.
+      if (hasBearer) {
+        const token = authHeader.slice(BEARER_PREFIX.length);
+        try {
+          request.user = await this.jwtService.verifyAsync<JwtPayload>(token);
+        } catch {
+          // Invalid token on a public route → treated as anonymous.
+        }
+      }
+      return true;
+    }
+
+    if (!hasBearer) {
       throw new UnauthorizedException();
     }
 

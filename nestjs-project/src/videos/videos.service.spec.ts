@@ -41,12 +41,14 @@ describe('VideosService', () => {
     completeMultipartUpload: jest.fn(),
     headObject: jest.fn(),
     abortMultipartUpload: jest.fn(),
+    presignGetUrl: jest.fn(),
   };
   const channels = { findByUserId: jest.fn() };
   const producer = { enqueueProcessing: jest.fn() };
   const config = {
     uploadPartSizeMb: 64,
     uploadUrlExpiresIn: 21600,
+    playbackUrlExpiresIn: 21600,
     bucket: 'streamtube-videos',
   };
 
@@ -214,6 +216,75 @@ describe('VideosService', () => {
         config.bucket,
         draft.original_key,
       );
+    });
+  });
+
+  describe('findByPublicId', () => {
+    const channel = {
+      id: 'channel-1',
+      name: 'My Channel',
+      nickname: 'my-channel',
+      user_id: 'user-1',
+    };
+    const readyVideo = {
+      public_id: 'abcdefghijk',
+      title: 'Ready Video',
+      description: 'desc',
+      status: VideoStatus.READY,
+      duration_seconds: 12.5,
+      width: 128,
+      height: 72,
+      thumbnail_key: 'videos/video-1/thumbnail.jpg',
+      error_code: null,
+      created_at: new Date('2026-07-08T12:00:00.000Z'),
+      channel,
+    };
+
+    it('returns the ready video to an anonymous caller with a presigned thumbnail and no error_code', async () => {
+      videoRepo.findOne.mockResolvedValue({ ...readyVideo });
+      storage.presignGetUrl.mockResolvedValue(
+        'https://minio.local/thumb?signed',
+      );
+
+      const result = await service.findByPublicId('abcdefghijk');
+
+      expect(result.status).toBe(VideoStatus.READY);
+      expect(result.thumbnail_url).toBe('https://minio.local/thumb?signed');
+      expect(result.channel).toEqual({
+        id: 'channel-1',
+        name: 'My Channel',
+        nickname: 'my-channel',
+      });
+      expect(result).not.toHaveProperty('error_code');
+    });
+
+    it('hides a processing video from an anonymous caller with VIDEO_NOT_FOUND', async () => {
+      videoRepo.findOne.mockResolvedValue({
+        ...readyVideo,
+        status: VideoStatus.PROCESSING,
+        thumbnail_key: null,
+      });
+
+      await expect(
+        service.findByPublicId('abcdefghijk'),
+      ).rejects.toBeInstanceOf(VideoNotFoundException);
+      expect(storage.presignGetUrl).not.toHaveBeenCalled();
+    });
+
+    it('shows a failed video with its error_code to the owner (no thumbnail while not ready)', async () => {
+      videoRepo.findOne.mockResolvedValue({
+        ...readyVideo,
+        status: VideoStatus.FAILED,
+        thumbnail_key: null,
+        error_code: 'PROBE_FAILED',
+      });
+
+      const result = await service.findByPublicId('abcdefghijk', 'user-1');
+
+      expect(result.status).toBe(VideoStatus.FAILED);
+      expect(result.error_code).toBe('PROBE_FAILED');
+      expect(result.thumbnail_url).toBeNull();
+      expect(storage.presignGetUrl).not.toHaveBeenCalled();
     });
   });
 });

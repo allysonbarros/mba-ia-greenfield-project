@@ -41,6 +41,21 @@ export interface CompleteUploadResult {
   status: VideoStatus;
 }
 
+export interface VideoDetailResult {
+  public_id: string;
+  title: string;
+  description: string | null;
+  status: VideoStatus;
+  duration_seconds: number | null;
+  width: number | null;
+  height: number | null;
+  thumbnail_url: string | null;
+  created_at: string;
+  channel: { id: string; name: string; nickname: string };
+  // Owner-only field — omitted entirely for anonymous/non-owner callers.
+  error_code?: string | null;
+}
+
 function isUniqueViolationOnColumn(error: unknown, column: string): boolean {
   if (!(error instanceof QueryFailedError)) return false;
   const err = error as QueryFailedError & { code?: string; detail?: string };
@@ -227,6 +242,60 @@ export class VideosService {
     );
 
     return { public_id: video.public_id, status: VideoStatus.PROCESSING };
+  }
+
+  /**
+   * Returns the public metadata of a video by its public id, enforcing the
+   * phase visibility rule (AMB-1): `ready` is visible to anyone; a non-`ready`
+   * video (draft/processing/failed) is visible only to its owner — everyone
+   * else gets VIDEO_NOT_FOUND with no existence leak. The presigned
+   * `thumbnail_url` is minted only for `ready` videos and the `error_code` is
+   * exposed only to the owner (phase-03-videos/TD-04 + TD-05 + TD-06).
+   */
+  async findByPublicId(
+    publicId: string,
+    requestingUserId?: string,
+  ): Promise<VideoDetailResult> {
+    const video = await this.videos.findOne({
+      where: { public_id: publicId },
+      relations: { channel: true },
+    });
+    if (!video) {
+      throw new VideoNotFoundException();
+    }
+
+    const isOwner =
+      requestingUserId !== undefined &&
+      video.channel.user_id === requestingUserId;
+
+    if (video.status !== VideoStatus.READY && !isOwner) {
+      throw new VideoNotFoundException();
+    }
+
+    const thumbnailUrl =
+      video.status === VideoStatus.READY && video.thumbnail_key
+        ? await this.storage.presignGetUrl(video.thumbnail_key, {
+            expiresIn: this.config.playbackUrlExpiresIn,
+          })
+        : null;
+
+    return {
+      public_id: video.public_id,
+      title: video.title,
+      description: video.description,
+      status: video.status,
+      duration_seconds: video.duration_seconds,
+      width: video.width,
+      height: video.height,
+      thumbnail_url: thumbnailUrl,
+      created_at: video.created_at.toISOString(),
+      channel: {
+        id: video.channel.id,
+        name: video.channel.name,
+        nickname: video.channel.nickname,
+      },
+      ...(isOwner ? { error_code: video.error_code } : {}),
+    };
   }
 
   // Inserts the draft row, regenerating public_id and retrying once on a
