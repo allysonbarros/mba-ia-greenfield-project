@@ -1,0 +1,17 @@
+# trixie-slim (Debian 13) is pinned explicitly: the bare `node:25.6.0-slim` tag
+# still resolves to bookworm, whose ffmpeg is 5.1.x — the phase requires 7.x
+# (phase-03-videos/TD-03), which trixie's apt provides.
+FROM node:25.6.0-trixie-slim
+
+# ffmpeg ships both ffmpeg and ffprobe (Debian trixie → 7.1.x) — the two binaries
+# the worker shells out to for probe/thumbnail (phase-03-videos/TD-03). procps and
+# curl mirror the dev image so debugging tooling matches.
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends ffmpeg procps curl \
+  && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /home/node/app
+
+USER node
+
+CMD [ "tail", "-f", "/dev/null" ]

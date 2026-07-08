@@ -1,7 +1,7 @@
 # phase-03-videos — Progress
 
 **Status:** in_progress
-**SIs:** 8/14 completed
+**SIs:** 9/14 completed
 
 ### SI-03.1 — Provisionar MinIO e Redis no Compose
 - **Status:** completed
@@ -75,9 +75,14 @@
   - E2E semeia vídeos direto no banco (`videoRepository.save`) nos estados necessários; canal do usuário resolvido decodificando o `sub` do access token e buscando por `user_id` (helper retorna `{ token, channel }`). `public_id` limitado a varchar(11) — fixtures usam exatamente 11 chars.
 
 ### SI-03.9 — Infra do worker: imagem com FFmpeg e serviço video-worker no Compose
-- **Status:** pending
-- **Tests:** _(not run)_
-- **Observations:** none
+- **Status:** completed
+- **Tests:** no tests (Infra)
+- **Observations:**
+  - SPEC_DEVIATION (base image tag): o plano/env-note dizem `node:25.6.0-slim` assumindo Debian trixie, mas a tag `-slim` ainda resolve para bookworm, cujo apt entrega ffmpeg 5.1.x. A AC exige ffprobe 7.x, então pinei `node:25.6.0-trixie-slim` explicitamente (Debian 13 → ffmpeg 7.1.5-0+deb13u1). Validado: `docker compose exec -T video-worker ffprobe -version` → `7.1.5`.
+  - `WorkerModule` (standalone app context) importa só infra — ConfigModule (load database/storage/queue + validationSchema), TypeOrmModule.forRootAsync + forFeature([Video, Channel, User]) (fecho de relação alcançável a partir de Video, senão o TypeORM falha ao montar metadata), StorageModule e BullMQ (forRootAsync connection + registerQueue). Sem controllers/guards/módulos HTTP (regra anti-acoplamento TD-03). O @Processor entra só no SI-03.12.
+  - `src/worker.ts` = `NestFactory.createApplicationContext(WorkerModule)` + `enableShutdownHooks()` + log de prontidão. Sem HTTP listener; a conexão BullMQ mantém o processo vivo (validado: `node dist/worker` roda até o `timeout` matá-lo, EXIT=124, sem log de "listening").
+  - Serviço `video-worker` no compose: build `Dockerfile.worker`, mesmo volume de código `.:/home/node/app`, `depends_on` db/minio/redis healthy. Comando idle (`tail -f /dev/null` herdado do Dockerfile) por design — mantém o container vivo para os testes integration via `docker compose exec` (SI-03.11/03.12) e para o smoke script (SI-03.14) sem auto-consumir a fila e roubar jobs dos testes que controlam o processamento in-process. Env vem do `.env` montado (mesmo padrão do nestjs-api, sem env_file no compose).
+  - Scripts npm: `start:worker` (`node dist/worker`) e `start:worker:dev` (`nest start --watch --entryFile worker`). `nest build` emite `dist/worker.js` (validado).
 
 ### SI-03.10 — Implementar streaming e download (302 → presigned GET)
 - **Status:** pending

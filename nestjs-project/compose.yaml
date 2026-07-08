@@ -17,6 +17,24 @@ services:
       redis:
         condition: service_healthy
 
+  # Video processing worker (phase-03-videos/TD-03): same codebase, ffmpeg-enabled
+  # image, standalone application context (no HTTP). Shares the dev code volume so
+  # it runs against the live source; stays idle (tail) by default so test runs and
+  # the smoke script control when it consumes the queue.
+  video-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    volumes:
+      - .:/home/node/app
+    depends_on:
+      db:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
   db:
     image: postgres:17
     ports:
