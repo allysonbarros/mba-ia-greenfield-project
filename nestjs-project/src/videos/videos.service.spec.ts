@@ -212,6 +212,13 @@ describe('VideosService', () => {
       );
 
       expect(result.status).toBe(VideoStatus.PROCESSING);
+      // Pin the CAS predicate: the transition must be guarded by the current
+      // DRAFT status — this is the only concurrency barrier against a
+      // double-complete race (verification.md, mutant #2).
+      expect(videoRepo.update).toHaveBeenCalledWith(
+        { id: draft.id, status: VideoStatus.DRAFT },
+        expect.objectContaining({ status: VideoStatus.PROCESSING }),
+      );
       expect(producer.enqueueProcessing).toHaveBeenCalledWith(
         draft.id,
         config.bucket,
