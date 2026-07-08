@@ -70,6 +70,13 @@ function extractExtension(fileName: string): string {
   return fileName.slice(fileName.lastIndexOf('.') + 1).toLowerCase();
 }
 
+// Title-derived download filename, stripped of characters that would break the
+// Content-Disposition quoted-string (quotes, backslashes, control chars).
+function buildDownloadFilename(title: string, ext: string): string {
+  const safe = title.replace(/["\\\r\n]/g, '').trim() || 'video';
+  return `${safe}.${ext}`;
+}
+
 @Injectable()
 export class VideosService {
   constructor(
@@ -296,6 +303,47 @@ export class VideosService {
       },
       ...(isOwner ? { error_code: video.error_code } : {}),
     };
+  }
+
+  /**
+   * Presigned inline GET for progressive playback — `ready` videos only (else
+   * VIDEO_NOT_FOUND). MinIO serves HTTP Range/206 natively off this URL, so no
+   * video bytes traverse the API (phase-03-videos/TD-04).
+   */
+  async getStreamUrl(publicId: string): Promise<string> {
+    const video = await this.findReadyOrThrow(publicId);
+    return this.storage.presignGetUrl(video.original_key, {
+      expiresIn: this.config.playbackUrlExpiresIn,
+    });
+  }
+
+  /**
+   * Presigned attachment GET for download — `ready` videos only. The
+   * response-content-disposition carries the title-derived filename so the
+   * browser saves it under a meaningful name (phase-03-videos/TD-04).
+   */
+  async getDownloadUrl(publicId: string): Promise<string> {
+    const video = await this.findReadyOrThrow(publicId);
+    const filename = buildDownloadFilename(
+      video.title,
+      extractExtension(video.original_key),
+    );
+    return this.storage.presignGetUrl(video.original_key, {
+      expiresIn: this.config.downloadUrlExpiresIn,
+      disposition: `attachment; filename="${filename}"`,
+    });
+  }
+
+  // Delivery is restricted to `ready` videos; anything else (including unknown
+  // ids) is a 404 with no existence leak.
+  private async findReadyOrThrow(publicId: string): Promise<Video> {
+    const video = await this.videos.findOne({
+      where: { public_id: publicId },
+    });
+    if (!video || video.status !== VideoStatus.READY) {
+      throw new VideoNotFoundException();
+    }
+    return video;
   }
 
   // Inserts the draft row, regenerating public_id and retrying once on a

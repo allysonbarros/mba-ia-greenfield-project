@@ -49,6 +49,7 @@ describe('VideosService', () => {
     uploadPartSizeMb: 64,
     uploadUrlExpiresIn: 21600,
     playbackUrlExpiresIn: 21600,
+    downloadUrlExpiresIn: 900,
     bucket: 'streamtube-videos',
   };
 
@@ -285,6 +286,76 @@ describe('VideosService', () => {
       expect(result.error_code).toBe('PROBE_FAILED');
       expect(result.thumbnail_url).toBeNull();
       expect(storage.presignGetUrl).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('getStreamUrl / getDownloadUrl', () => {
+    const readyVideo = {
+      public_id: 'abcdefghijk',
+      title: 'My Clip',
+      status: VideoStatus.READY,
+      original_key: 'videos/video-1/original.mp4',
+    };
+
+    it('presigns an inline playback URL for a ready video (playback expiry, no disposition)', async () => {
+      videoRepo.findOne.mockResolvedValue({ ...readyVideo });
+      storage.presignGetUrl.mockResolvedValue('https://minio.local/play?signed');
+
+      const url = await service.getStreamUrl('abcdefghijk');
+
+      expect(url).toBe('https://minio.local/play?signed');
+      expect(storage.presignGetUrl).toHaveBeenCalledWith(
+        'videos/video-1/original.mp4',
+        { expiresIn: config.playbackUrlExpiresIn },
+      );
+    });
+
+    it('presigns an attachment download URL with the title-derived filename (download expiry)', async () => {
+      videoRepo.findOne.mockResolvedValue({ ...readyVideo });
+      storage.presignGetUrl.mockResolvedValue('https://minio.local/dl?signed');
+
+      const url = await service.getDownloadUrl('abcdefghijk');
+
+      expect(url).toBe('https://minio.local/dl?signed');
+      expect(storage.presignGetUrl).toHaveBeenCalledWith(
+        'videos/video-1/original.mp4',
+        {
+          expiresIn: config.downloadUrlExpiresIn,
+          disposition: 'attachment; filename="My Clip.mp4"',
+        },
+      );
+    });
+
+    it('throws VIDEO_NOT_FOUND on a non-ready video for stream', async () => {
+      videoRepo.findOne.mockResolvedValue({
+        ...readyVideo,
+        status: VideoStatus.PROCESSING,
+      });
+
+      await expect(service.getStreamUrl('abcdefghijk')).rejects.toBeInstanceOf(
+        VideoNotFoundException,
+      );
+      expect(storage.presignGetUrl).not.toHaveBeenCalled();
+    });
+
+    it('throws VIDEO_NOT_FOUND on a non-ready video for download', async () => {
+      videoRepo.findOne.mockResolvedValue({
+        ...readyVideo,
+        status: VideoStatus.FAILED,
+      });
+
+      await expect(
+        service.getDownloadUrl('abcdefghijk'),
+      ).rejects.toBeInstanceOf(VideoNotFoundException);
+      expect(storage.presignGetUrl).not.toHaveBeenCalled();
+    });
+
+    it('throws VIDEO_NOT_FOUND when the video does not exist', async () => {
+      videoRepo.findOne.mockResolvedValue(null);
+
+      await expect(service.getStreamUrl('abcdefghijk')).rejects.toBeInstanceOf(
+        VideoNotFoundException,
+      );
     });
   });
 });

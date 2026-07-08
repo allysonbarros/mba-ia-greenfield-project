@@ -6,6 +6,7 @@ import {
   HttpStatus,
   Param,
   Post,
+  Redirect,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -192,5 +193,80 @@ export class VideosController {
     @CurrentUser() user?: JwtPayload,
   ): Promise<VideoDetailResult> {
     return this.videosService.findByPublicId(params.publicId, user?.sub);
+  }
+
+  @Get(':publicId/stream')
+  @Public()
+  @Redirect()
+  @ApiParam({ name: 'publicId', description: 'Public identifier of the video' })
+  @ApiOperation({
+    summary: 'Stream a video',
+    description:
+      'Redirects (302) to a presigned inline GET URL on the storage public ' +
+      'endpoint. The storage serves HTTP Range/206 natively — no video bytes ' +
+      'pass through the API. Only `ready` videos are streamable.',
+  })
+  @ApiResponse({
+    status: 302,
+    description: 'Redirect to the presigned inline playback URL',
+    headers: {
+      Location: {
+        description: 'Presigned GET URL (inline disposition)',
+        schema: { type: 'string' },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'publicId does not match the [A-Za-z0-9_-]{11} format',
+    schema: { $ref: getSchemaPath(ApiErrorEnvelope) },
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'VIDEO_NOT_FOUND (unknown video or not ready)',
+    schema: { $ref: getSchemaPath(ApiErrorEnvelope) },
+  })
+  async stream(
+    @Param() params: PublicIdParamDto,
+  ): Promise<{ url: string; statusCode: number }> {
+    const url = await this.videosService.getStreamUrl(params.publicId);
+    return { url, statusCode: HttpStatus.FOUND };
+  }
+
+  @Get(':publicId/download')
+  @Public()
+  @Redirect()
+  @ApiParam({ name: 'publicId', description: 'Public identifier of the video' })
+  @ApiOperation({
+    summary: 'Download a video',
+    description:
+      'Redirects (302) to a presigned GET URL with an attachment disposition ' +
+      'and the title-derived filename. Only `ready` videos are downloadable.',
+  })
+  @ApiResponse({
+    status: 302,
+    description: 'Redirect to the presigned attachment download URL',
+    headers: {
+      Location: {
+        description: 'Presigned GET URL (attachment disposition)',
+        schema: { type: 'string' },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'publicId does not match the [A-Za-z0-9_-]{11} format',
+    schema: { $ref: getSchemaPath(ApiErrorEnvelope) },
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'VIDEO_NOT_FOUND (unknown video or not ready)',
+    schema: { $ref: getSchemaPath(ApiErrorEnvelope) },
+  })
+  async download(
+    @Param() params: PublicIdParamDto,
+  ): Promise<{ url: string; statusCode: number }> {
+    const url = await this.videosService.getDownloadUrl(params.publicId);
+    return { url, statusCode: HttpStatus.FOUND };
   }
 }

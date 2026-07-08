@@ -1,7 +1,7 @@
 # phase-03-videos — Progress
 
 **Status:** in_progress
-**SIs:** 9/14 completed
+**SIs:** 10/14 completed
 
 ### SI-03.1 — Provisionar MinIO e Redis no Compose
 - **Status:** completed
@@ -85,9 +85,13 @@
   - Scripts npm: `start:worker` (`node dist/worker`) e `start:worker:dev` (`nest start --watch --entryFile worker`). `nest build` emite `dist/worker.js` (validado).
 
 ### SI-03.10 — Implementar streaming e download (302 → presigned GET)
-- **Status:** pending
-- **Tests:** _(not run)_
-- **Observations:** none
+- **Status:** completed
+- **Tests:** 23 passing (videos.service.spec 16 unit [+5 delivery], videos-delivery.integration-spec 3 contra MinIO real, videos-delivery.e2e-spec 4)
+- **Observations:**
+  - `getStreamUrl`/`getDownloadUrl` só entregam vídeos `ready` (senão `VIDEO_NOT_FOUND` via helper `findReadyOrThrow`, sem vazamento de existência). Stream = presign GET inline com `PLAYBACK_URL_EXPIRES_IN`; download = presign GET com `disposition: attachment; filename="{title}.{ext}"` e `DOWNLOAD_URL_EXPIRES_IN`. Extensão derivada do `original_key`; filename saneado (`buildDownloadFilename`) removendo aspas/barras/controle que quebrariam o quoted-string do Content-Disposition.
+  - Endpoints `@Public` `GET :publicId/stream` e `:publicId/download` usam `@Redirect()` retornando `{ url, statusCode: 302 }`. Reusam `PublicIdParamDto` (validação de formato → 400). Swagger documenta o 302 com header `Location`.
+  - SPEC_DEVIATION: os testes integration/e2e semeiam um Buffer inline como objeto em vez de `test/fixtures/tiny.mp4` (deliverable do SI-03.11, exige ffmpeg). Delivery só presigna+streama bytes — MinIO serve Range/206 sobre qualquer objeto. `emptyBucket()` inlinado (`listObjects`+`deleteObjects`) por ser deliverable do SI-03.14.
+  - No ambiente de teste `STORAGE_PUBLIC_ENDPOINT=http://minio:9000` (mesmo host interno, pois os testes rodam dentro da rede Docker), então seguir o `Location` a partir do container funciona; o e2e afere `minio:9000` + `X-Amz-Signature` no `Location`.
 
 ### SI-03.11 — Implementar FfmpegService (probe e thumbnail)
 - **Status:** pending
