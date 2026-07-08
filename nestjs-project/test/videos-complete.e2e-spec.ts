@@ -6,10 +6,7 @@ import { DataSource, Repository } from 'typeorm';
 import { ThrottlerStorage, ThrottlerStorageService } from '@nestjs/throttler';
 import { getQueueToken } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
-import {
-  ListMultipartUploadsCommand,
-  S3Client,
-} from '@aws-sdk/client-s3';
+import { ListMultipartUploadsCommand, S3Client } from '@aws-sdk/client-s3';
 import { AppModule } from '../src/app.module';
 import { AuthService } from '../src/auth/auth.service';
 import { DomainExceptionFilter } from '../src/common/filters/domain-exception.filter';
@@ -137,7 +134,9 @@ describe('videos-complete', () => {
 
     expect(res.body.status).toBe('processing');
 
-    const video = await videoRepository.findOneByOrFail({ public_id: publicId });
+    const video = await videoRepository.findOneByOrFail({
+      public_id: publicId,
+    });
     const job = await queue.getJob(video.id);
     expect(job).toBeDefined();
     expect(job!.data).toEqual({
@@ -179,7 +178,9 @@ describe('videos-complete', () => {
       .expect(400);
 
     expect(res.body.error).toBe('VIDEO_UPLOAD_INCOMPLETE');
-    const video = await videoRepository.findOneByOrFail({ public_id: publicId });
+    const video = await videoRepository.findOneByOrFail({
+      public_id: publicId,
+    });
     expect(video.status).toBe('draft');
     const counts = await queue.getJobCounts();
     expect(counts.waiting).toBe(0);
@@ -212,7 +213,9 @@ describe('videos-complete', () => {
 
     expect(res.body.error).toBe('VIDEO_UPLOAD_SIZE_MISMATCH');
 
-    const video = await videoRepository.findOneByOrFail({ public_id: publicId });
+    const video = await videoRepository.findOneByOrFail({
+      public_id: publicId,
+    });
     expect(video.status).toBe('failed');
 
     const list = await s3.send(

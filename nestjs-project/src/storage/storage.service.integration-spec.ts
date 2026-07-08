@@ -60,7 +60,12 @@ describe('StorageService (integration)', () => {
         'application/octet-stream',
       );
       const body = Buffer.alloc(1024, 0x61);
-      const [part] = await service.presignUploadPartUrls(key, uploadId, 1, 3600);
+      const [part] = await service.presignUploadPartUrls(
+        key,
+        uploadId,
+        1,
+        3600,
+      );
 
       // presigned URL must carry the public endpoint host, not an ops-only host
       expect(part.url).toContain('minio:9000');

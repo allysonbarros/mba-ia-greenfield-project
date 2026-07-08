@@ -138,7 +138,11 @@ describe('VideosService', () => {
         upload_id: null,
       });
 
-      const result = await service.completeUpload('user-1', 'abcdefghijk', parts);
+      const result = await service.completeUpload(
+        'user-1',
+        'abcdefghijk',
+        parts,
+      );
 
       expect(result.status).toBe(VideoStatus.PROCESSING);
       expect(storage.completeMultipartUpload).not.toHaveBeenCalled();

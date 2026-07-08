@@ -108,7 +108,8 @@ export class VideosController {
   })
   @ApiResponse({
     status: 400,
-    description: 'VIDEO_UPLOAD_INCOMPLETE, VIDEO_UPLOAD_SIZE_MISMATCH or validation error',
+    description:
+      'VIDEO_UPLOAD_INCOMPLETE, VIDEO_UPLOAD_SIZE_MISMATCH or validation error',
     schema: { $ref: getSchemaPath(ApiErrorEnvelope) },
   })
   @ApiResponse({

@@ -11,7 +11,10 @@ import { VerificationToken } from '../auth/entities/verification-token.entity';
 import { Channel } from '../channels/entities/channel.entity';
 import { VIDEO_QUEUE } from '../queue/queue.constants';
 import { StorageService } from '../storage/storage.service';
-import { cleanAllTables, createTestDataSource } from '../test/create-test-data-source';
+import {
+  cleanAllTables,
+  createTestDataSource,
+} from '../test/create-test-data-source';
 import { User } from '../users/entities/user.entity';
 import { Video, VideoStatus } from './entities/video.entity';
 import { VideosModule } from './videos.module';
@@ -68,7 +71,10 @@ describe('Video upload flow (integration)', () => {
 
   async function createUserWithChannel(): Promise<string> {
     const user = await userRepo.save(
-      userRepo.create({ email: `upload_${Date.now()}@example.com`, password: 'h' }),
+      userRepo.create({
+        email: `upload_${Date.now()}@example.com`,
+        password: 'h',
+      }),
     );
     await channelRepo.save(
       channelRepo.create({

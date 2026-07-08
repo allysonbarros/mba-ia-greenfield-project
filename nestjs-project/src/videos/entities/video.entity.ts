@@ -22,7 +22,8 @@ export enum VideoStatus {
 // duration_seconds both fit safely in a JS number.
 const bigintTransformer = {
   to: (value: number): number => value,
-  from: (value: string | null): number => (value === null ? 0 : parseInt(value, 10)),
+  from: (value: string | null): number =>
+    value === null ? 0 : parseInt(value, 10),
 };
 
 const numericTransformer = {

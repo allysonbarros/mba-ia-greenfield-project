@@ -12,7 +12,10 @@ export default registerAs('storage', () => ({
   forcePathStyle: process.env.STORAGE_FORCE_PATH_STYLE !== 'false',
   autoCreateBucket: process.env.STORAGE_AUTO_CREATE_BUCKET !== 'false',
   uploadPartSizeMb: parseInt(process.env.UPLOAD_PART_SIZE_MB || '64', 10),
-  uploadUrlExpiresIn: parseInt(process.env.UPLOAD_URL_EXPIRES_IN || '21600', 10),
+  uploadUrlExpiresIn: parseInt(
+    process.env.UPLOAD_URL_EXPIRES_IN || '21600',
+    10,
+  ),
   playbackUrlExpiresIn: parseInt(
     process.env.PLAYBACK_URL_EXPIRES_IN || '21600',
     10,

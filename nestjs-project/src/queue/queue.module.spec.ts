@@ -15,7 +15,9 @@ describe('QueueModule', () => {
       ],
     }).compile();
 
-    expect(moduleRef.get(VideoQueueProducer)).toBeInstanceOf(VideoQueueProducer);
+    expect(moduleRef.get(VideoQueueProducer)).toBeInstanceOf(
+      VideoQueueProducer,
+    );
     expect(moduleRef.get(getQueueToken(VIDEO_QUEUE))).toBeDefined();
 
     await moduleRef.close();
