@@ -97,11 +97,13 @@ docker compose exec nestjs-api npm test -- --runInBand
 docker compose exec nestjs-api npm run test:e2e   # already configured
 ```
 
-**Worker suites run inside the `video-worker` container** — `src/worker/*.integration-spec.ts` shells out to real `ffprobe`/`ffmpeg`, which only exist in the worker image:
+**Worker integration suites run inside the `video-worker` container** — `src/worker/*.integration-spec.ts` shells out to real `ffprobe`/`ffmpeg`, which only exist in the worker image. The API jest config ignores those files (`testPathIgnorePatterns`); they have their own config (`test/jest-worker.json`):
 
 ```bash
-docker compose exec video-worker npx jest --runInBand --forceExit src/worker
+docker compose exec video-worker npm run test:worker -- --forceExit
 ```
+
+Worker *unit* specs (`src/worker/*.spec.ts`, ffmpeg mocked) still run with the regular API suite.
 
 Parallel execution causes FK violations, deadlocks, and cross-suite contamination because suites truncate or seed shared tables concurrently.
 

@@ -20,6 +20,7 @@
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:integration": "jest --runInBand --testRegex=\"\\.integration-spec\\.ts$\"",
+    "test:worker": "jest --config ./test/jest-worker.json --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "typeorm": "typeorm-ts-node-commonjs",
     "migration:run": "npm run typeorm -- migration:run -d src/database/data-source.ts",
@@ -88,6 +89,10 @@
     ],
     "rootDir": "src",
     "testRegex": ".*\\.(spec|integration-spec)\\.ts$",
+    "testPathIgnorePatterns": [
+      "/node_modules/",
+      "src/worker/.+\\.integration-spec\\.ts$"
+    ],
     "transform": {
       "^.+\\.(t|j)s$": "ts-jest"
     },
