@@ -1,7 +1,7 @@
 # phase-03-videos — Progress
 
 **Status:** in_progress
-**SIs:** 2/14 completed
+**SIs:** 3/14 completed
 
 ### SI-03.1 — Provisionar MinIO e Redis no Compose
 - **Status:** completed
@@ -18,9 +18,12 @@
   - `env.validation.integration-spec.ts` é, na prática, um teste unitário (só valida o schema Joi, sem DB) apesar do sufixo `.integration-spec`; renomeá-lo está fora de escopo — mantido como está.
 
 ### SI-03.3 — StorageModule: dual S3 clients e StorageService
-- **Status:** pending
-- **Tests:** _(not run)_
-- **Observations:** none
+- **Status:** completed
+- **Tests:** 5 passing (storage.module.spec.ts 1 compilação + storage.service.integration-spec.ts 4 contra MinIO real)
+- **Observations:**
+  - SPEC_DEVIATION: as assinaturas do plano (`presignUploadPartUrls(uploadId, partCount, expiresIn)`, `completeMultipartUpload(parts)`, `abortMultipartUpload`, `createMultipartUpload`) omitem o `key`, mas todo comando S3 multipart exige `Key`; adicionei `key` como primeiro parâmetro em cada uma. Bucket vem da config injetada (não é parâmetro). Sem isso é impossível presignar/completar.
+  - Clients criados com `requestChecksumCalculation: 'WHEN_REQUIRED'` (per library-refs) para o SDK v3.729+ não embutir header CRC32 na URL presigned de UploadPart, que quebraria um PUT simples do cliente.
+  - Instalados `@aws-sdk/client-s3@^3.1081.0`, `@aws-sdk/s3-request-presigner@^3.1081.0`, `@aws-sdk/lib-storage@^3.1081.0` no container.
 
 ### SI-03.4 — Criar entidade Video, migration CreateVideos e gerador de public_id
 - **Status:** pending
