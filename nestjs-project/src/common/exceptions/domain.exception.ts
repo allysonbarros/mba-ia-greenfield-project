@@ -48,3 +48,55 @@ export class TokenReuseDetectedException extends DomainException {
     );
   }
 }
+
+export class VideoFileTooLargeException extends DomainException {
+  constructor() {
+    super('VIDEO_FILE_TOO_LARGE', 400, 'Video file exceeds the 10 GiB limit');
+  }
+}
+
+export class VideoInvalidContentTypeException extends DomainException {
+  constructor() {
+    super(
+      'VIDEO_INVALID_CONTENT_TYPE',
+      400,
+      'content_type must be a video/* media type',
+    );
+  }
+}
+
+export class VideoNotFoundException extends DomainException {
+  constructor() {
+    super('VIDEO_NOT_FOUND', 404, 'Video not found');
+  }
+}
+
+export class VideoUploadIncompleteException extends DomainException {
+  constructor() {
+    super(
+      'VIDEO_UPLOAD_INCOMPLETE',
+      400,
+      'Multipart upload could not be completed — object missing or parts invalid',
+    );
+  }
+}
+
+export class VideoUploadSizeMismatchException extends DomainException {
+  constructor() {
+    super(
+      'VIDEO_UPLOAD_SIZE_MISMATCH',
+      400,
+      'Uploaded object size exceeds the limit or diverges from the declared size',
+    );
+  }
+}
+
+export class VideoUploadNotCompletableException extends DomainException {
+  constructor() {
+    super(
+      'VIDEO_UPLOAD_NOT_COMPLETABLE',
+      409,
+      'Video upload cannot be completed from its current status',
+    );
+  }
+}

@@ -21,4 +21,23 @@ export const envValidationSchema = Joi.object({
   MAIL_PORT: Joi.number().default(1025),
   MAIL_FROM: Joi.string().default('"StreamTube" <noreply@streamtube.com>'),
   SWAGGER_ENABLED: Joi.string().valid('true', 'false').default('false'),
+  // Object storage (phase-03-videos/TD-07)
+  STORAGE_ENDPOINT: Joi.string().uri().required(),
+  STORAGE_PUBLIC_ENDPOINT: Joi.string().uri().required(),
+  STORAGE_REGION: Joi.string().default('us-east-1'),
+  STORAGE_ACCESS_KEY_ID: Joi.string().required(),
+  STORAGE_SECRET_ACCESS_KEY: Joi.string().required(),
+  STORAGE_BUCKET: Joi.string().required(),
+  STORAGE_FORCE_PATH_STYLE: Joi.boolean().default(true),
+  STORAGE_AUTO_CREATE_BUCKET: Joi.boolean().default(true),
+  UPLOAD_PART_SIZE_MB: Joi.number().default(64),
+  UPLOAD_URL_EXPIRES_IN: Joi.number().default(21600),
+  PLAYBACK_URL_EXPIRES_IN: Joi.number().default(21600),
+  DOWNLOAD_URL_EXPIRES_IN: Joi.number().default(900),
+  UPLOAD_STALE_TTL_HOURS: Joi.number().default(24),
+  // Queue (phase-03-videos/TD-01 + TD-06)
+  REDIS_HOST: Joi.string().required(),
+  REDIS_PORT: Joi.number().default(6379),
+  VIDEO_PROCESSING_ATTEMPTS: Joi.number().default(3),
+  PROCESSING_STUCK_CEILING_HOURS: Joi.number().default(2),
 });
