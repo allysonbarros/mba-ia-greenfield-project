@@ -13,6 +13,8 @@ docker compose ps   # all services must show status "running"
 Then verify each infrastructure service is actually ready to accept connections — not just running:
 
 - **PostgreSQL:** `docker compose exec db pg_isready -U streamtube` — expect `accepting connections`
+- **MinIO:** `curl -f http://localhost:9000/minio/health/live` (from the host) — expect HTTP 200
+- **Redis:** `docker compose exec redis redis-cli ping` — expect `PONG`
 
 Only start the NestJS dev server (`npm run start:dev`) when the user **explicitly** asks to run the application — never as part of "start the environment".
 
@@ -34,6 +36,10 @@ docker compose exec nestjs-api npm run start:dev
 Services:
 - `nestjs-api` — NestJS API, port `3000`
 - `db` — PostgreSQL 17, port `5432`, database `streamtube`, user/password `streamtube`
+- `mailpit` — SMTP capture, ports `1025` (SMTP) / `8025` (UI)
+- `minio` — S3-compatible object storage, ports `9000` (API) / `9001` (console), credentials `minioadmin`/`minioadmin`, bucket auto-created in dev (`STORAGE_AUTO_CREATE_BUCKET=true`)
+- `redis` — BullMQ broker (AOF persistence), port `6379`
+- `video-worker` — video processing worker (same codebase, ffmpeg-enabled image via `Dockerfile.worker`, no HTTP listener); idles by default — tests and the smoke script control when it consumes the queue
 
 All verification and teardown commands run on the **host machine**:
 
@@ -84,12 +90,20 @@ curl http://localhost:3000
 
 ### Test execution
 
-Integration and e2e suites share a single test database. They **must** be run with `--runInBand`:
+Integration and e2e suites share a single test database, so they **must** run serialized. The `test`, `test:integration`, `test:worker` and `test:e2e` scripts already bake `--runInBand` in — run them as-is:
 
 ```bash
-docker compose exec nestjs-api npm test -- --runInBand
-docker compose exec nestjs-api npm run test:e2e   # already configured
+docker compose exec nestjs-api npm test
+docker compose exec nestjs-api npm run test:e2e
 ```
+
+**Worker integration suites run inside the `video-worker` container** — `src/worker/*.integration-spec.ts` shells out to real `ffprobe`/`ffmpeg`, which only exist in the worker image. The API jest config ignores those files (`testPathIgnorePatterns`); they have their own config (`test/jest-worker.json`):
+
+```bash
+docker compose exec video-worker npm run test:worker -- --forceExit
+```
+
+Worker *unit* specs (`src/worker/*.spec.ts`, ffmpeg mocked) still run with the regular API suite.
 
 Parallel execution causes FK violations, deadlocks, and cross-suite contamination because suites truncate or seed shared tables concurrently.
 
@@ -159,3 +173,26 @@ NestJS with standard module structure. Source lives in `src/`, compiled output i
 ## REST Conventions
 
 This is a RESTful API. All endpoints must follow standard REST conventions — correct HTTP methods, proper status codes, plural resource nouns, and consistent URL structure. Details are enforced via rules on controller files.
+
+## Videos Module (Fase 03)
+
+Video upload and processing pipeline. Plan and per-SI history: `docs/phases/phase-03-videos/`.
+
+**Modules:**
+- `src/videos/` — `VideosController`/`VideosService` (initiate/complete/consulta/stream/download), `Video` entity (`videos` table, FK `channel_id`, enum `video_status`: `draft | processing | ready | failed`), `public-id.util.ts` (11-char base64url id, zero-dep), `video-sweep.service.ts` (`@Cron` sweep: aborta multipart de drafts além de `UPLOAD_STALE_TTL_HOURS` e derruba `processing` travado para `failed` após `PROCESSING_STUCK_CEILING_HOURS`)
+- `src/storage/` — `StorageModule`/`StorageService`: dois S3 clients (`STORAGE_ENDPOINT` interno p/ ops; `STORAGE_PUBLIC_ENDPOINT` só p/ presign — SigV4 assina o Host), multipart, presigned GET (inline/attachment), ensure-bucket no boot
+- `src/queue/` — `QueueModule` (BullMQ via `@nestjs/bullmq`) + `VideoQueueProducer` (fila `video-processing`, `jobId = videoId` p/ enqueue idempotente, retries com backoff exponencial)
+- `src/worker/` — `WorkerModule` (standalone application context, sem HTTP; entrypoint `src/worker.ts`), `FfmpegService` (ffprobe metadata + thumbnail via `node:child_process`, input seekable por presigned URL), `VideoProcessor` (`WorkerHost`: transições CAS `processing → ready/failed`, `error_code` em falha)
+
+**Endpoints** (contratos completos em `docs/phases/phase-03-videos/phase-03-videos.md` → API Contracts, e no `openapi.json`):
+- `POST /videos` (auth) — pré-cadastro `draft` + URLs presigned de multipart (arquivo até 10 GiB; bytes nunca passam pela API)
+- `POST /videos/:publicId/complete` (auth, dono) — fecha multipart, valida tamanho via HeadObject, CAS `draft→processing`, enfileira `video.process` (idempotente)
+- `GET /videos/:publicId` (público c/ optional-auth) — metadados/status; vídeos não-`ready` só o dono vê (demais recebem 404)
+- `GET /videos/:publicId/stream` (público) — `302` p/ presigned GET inline (Range/206 servido pelo storage)
+- `GET /videos/:publicId/download` (público) — `302` p/ presigned GET com `content-disposition: attachment`
+
+**Env:** chaves `STORAGE_*`, `UPLOAD_*`, `PLAYBACK_URL_EXPIRES_IN`, `DOWNLOAD_URL_EXPIRES_IN`, `REDIS_*`, `VIDEO_PROCESSING_ATTEMPTS`, `PROCESSING_STUCK_CEILING_HOURS` — ver `.env.example` (validadas por Joi em `src/config/env.validation.ts`; namespaces `storage.config.ts` / `queue.config.ts`).
+
+**Worker (dev):** `npm run start:worker:dev` (watch) ou `node dist/worker` no container `video-worker`. O container fica ocioso por padrão; o smoke script `scripts/smoke-video-pipeline.sh` exercita o fluxo completo cross-container (upload real → worker consome → `ready`).
+
+**Fixture de teste:** `test/fixtures/tiny.mp4` (<100KB, gerada com ffmpeg `testsrc`; ver `test/fixtures/README.md`) — exercita o caminho multipart real (última parte não tem mínimo de 5 MiB). Helpers de pipeline em `test/helpers/video-pipeline.helpers.ts` (`emptyBucket`, `drainQueue`, `waitForStatus` orientado a eventos).
