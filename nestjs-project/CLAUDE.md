@@ -90,11 +90,11 @@ curl http://localhost:3000
 
 ### Test execution
 
-Integration and e2e suites share a single test database. They **must** be run with `--runInBand`:
+Integration and e2e suites share a single test database, so they **must** run serialized. The `test`, `test:integration`, `test:worker` and `test:e2e` scripts already bake `--runInBand` in — run them as-is:
 
 ```bash
-docker compose exec nestjs-api npm test -- --runInBand
-docker compose exec nestjs-api npm run test:e2e   # already configured
+docker compose exec nestjs-api npm test
+docker compose exec nestjs-api npm run test:e2e
 ```
 
 **Worker integration suites run inside the `video-worker` container** — `src/worker/*.integration-spec.ts` shells out to real `ffprobe`/`ffmpeg`, which only exist in the worker image. The API jest config ignores those files (`testPathIgnorePatterns`); they have their own config (`test/jest-worker.json`):

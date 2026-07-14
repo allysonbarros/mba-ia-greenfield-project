@@ -217,6 +217,16 @@ Each mutant applied to the working tree, targeted killer test(s) run, then resto
 
 ---
 
+## Correção pós-avaliação (2026-07-14)
+
+**Achado do avaliador (plataforma MBA):** rodando `npm test` e `npm run test:e2e` **verbatim** (sem flags), as suítes sobem em paralelo contra o mesmo Postgres e o `cleanAllTables` de uma suíte apaga dados de outra (violação de FK, 401 no meio do upload). A verificação desta fase sempre executou com `--runInBand` apendado manualmente (conforme o CLAUDE.md da época), então o caminho paralelo dos scripts puros nunca foi exercitado — gap legítimo entre "comando documentado" e "comando do projeto".
+
+**Reprodução (pré-fix):** `npm test` verbatim → 11/38 suítes vermelhas (não-determinístico; avaliador viu 6/38 e 6/8).
+
+**Fix:** `--runInBand` embutido nos scripts `test` e `test:e2e` do `package.json`, espelhando `test:integration`/`test:worker` (como prescrito na revisão). Doc do backend atualizada para os comandos puros.
+
+**Evidência (pós-fix, comandos verbatim):** `npm test` → 38/38 suítes, 202/202 testes, exit 0 (2 execuções consecutivas); `npm run test:e2e` → 8/8 suítes, 71/71 testes, exit 0. Efeito colateral positivo: serializado, o jest encerra sozinho (o lingering por open handles só se manifestava nos workers paralelos).
+
 ## Re-verification (fix loop 1)
 
 **Date:** 2026-07-08 · **HEAD:** `7f1a1fa` · **Commits verified:** `b5cbbdf` (worker specs get own `test:worker` config + API `testPathIgnorePatterns`), `20856fc` (pin CAS `draft→processing` predicate in the completeUpload unit), `7f1a1fa` (sweep captures `processing` never collected by the worker).
